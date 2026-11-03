@@ -1,0 +1,14 @@
+# Secretos
+.env
+datos/.clave_sesion
+
+# Datos y estado en tiempo de ejecución
+datos/
+mosquitto/data/
+mosquitto/log/
+zigbee2mqtt/data/
+!zigbee2mqtt/data/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
