@@ -10,67 +10,67 @@
 ![CoreUI](https://img.shields.io/badge/CoreUI-321FDB?logo=coreui&logoColor=white)
 ![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)
 
-Panel web para registrar la temperatura y la humedad de cada habitación de una casa con sensores Zigbee.
+Web dashboard that logs the temperature and humidity of every room in a house using Zigbee sensors.
 
-Los sensores publican sus lecturas en Zigbee2MQTT. El panel las recibe por MQTT, las guarda en SQLite y las muestra en gráficos junto con la temperatura exterior de [Open-Meteo](https://open-meteo.com/).
+The sensors publish their readings to Zigbee2MQTT. The dashboard receives them over MQTT, stores them in SQLite and plots them alongside the outdoor temperature from [Open-Meteo](https://open-meteo.com/).
 
-## Qué hace
+## Features
 
-- Muestra la temperatura y la humedad actuales de cada sensor y las del exterior (Open-Meteo, según la ubicación configurada).
-- Guarda las lecturas cada N minutos (configurable desde el panel) y las grafica por rango de fechas, con zoom.
-- Registra cuándo se abren y se cierran las ventanas y los cambios en los termostatos.
-- Acepta sensores manuales para habitaciones sin sensor Zigbee.
-- Lleva lecturas de medidores de calefacción y agua caliente, con períodos de facturación y cálculo de consumo.
-- Exporta temperaturas, ventanas, termostatos y consumo a CSV.
-- Está en español, inglés y alemán; elige el idioma según el navegador.
-- Pide contraseña para entrar.
+- Shows the current temperature and humidity of each sensor, plus outdoor conditions (Open-Meteo, based on the configured location).
+- Stores readings every N minutes (configurable from the dashboard) and charts them by date range, with zoom.
+- Logs when windows are opened and closed, and changes to thermostats.
+- Supports manual sensors for rooms without a Zigbee sensor.
+- Tracks heating and hot water meter readings, with billing periods and consumption calculation.
+- Exports temperatures, windows, thermostats and consumption to CSV.
+- Available in Spanish, English and German; the language is picked from the browser.
+- Password-protected.
 
-## Arquitectura
+## Architecture
 
 ```
-Sensores Zigbee ──► Dongle USB ──► zigbee2mqtt ──► mosquitto ──► panel ──► navegador
-                                     :8081          :1883         :8082
+Zigbee sensors ──► USB dongle ──► zigbee2mqtt ──► mosquitto ──► panel ──► browser
+                                     :8081          :1883        :8082
                                                                    │
                                                           datos/clima.db (SQLite)
 ```
 
-| Servicio      | Imagen                       | Puerto host | Función                                   |
-|---------------|------------------------------|-------------|-------------------------------------------|
-| `mosquitto`   | `eclipse-mosquitto:2.0.20`   | 1883        | Broker MQTT                               |
-| `zigbee2mqtt` | `koenkk/zigbee2mqtt:2.6.2`   | 8081        | Puente Zigbee → MQTT, con interfaz web    |
-| `panel`       | build local (`panel/`)       | 8082        | Flask + Waitress, API y frontend estático |
+| Service       | Image                        | Host port | Role                                      |
+|---------------|------------------------------|-----------|-------------------------------------------|
+| `mosquitto`   | `eclipse-mosquitto:2.0.20`   | 1883      | MQTT broker                               |
+| `zigbee2mqtt` | `koenkk/zigbee2mqtt:2.6.2`   | 8081      | Zigbee → MQTT bridge, with web UI         |
+| `panel`       | local build (`panel/`)       | 8082      | Flask + Waitress, API and static frontend |
 
-El frontend usa archivos estáticos (CoreUI, Chart.js, chartjs-plugin-zoom, flatpickr), sin paso de build. Las librerías están copiadas en `panel/static/vendor`, así que el panel no carga nada de un CDN.
+The frontend is plain static files (CoreUI, Chart.js, chartjs-plugin-zoom, flatpickr) with no build step. The libraries are vendored in `panel/static/vendor`, so the dashboard loads nothing from a CDN.
 
-## Requisitos
+## Requirements
 
-- Linux con Docker y el plugin Docker Compose v2. Probado en una Raspberry Pi con Raspberry Pi OS de 64 bits.
-- Un coordinador Zigbee USB compatible con Zigbee2MQTT. Este proyecto usa un **SONOFF Zigbee 3.0 USB Dongle Plus MG24** (adaptador `ember`).
-- Sensores Zigbee de temperatura y humedad.
-- Acceso a internet desde el host para consultar Open-Meteo (opcional: sin él, el panel funciona igual pero no muestra la temperatura exterior).
+- Linux with Docker and the Docker Compose v2 plugin. Tested on a Raspberry Pi running 64-bit Raspberry Pi OS.
+- A USB Zigbee coordinator supported by Zigbee2MQTT. This project uses a **SONOFF Zigbee 3.0 USB Dongle Plus MG24** (`ember` adapter).
+- Zigbee temperature and humidity sensors.
+- Internet access from the host to query Open-Meteo (optional: without it the dashboard still works, but doesn't show the outdoor temperature).
 
-## Instalación
+## Installation
 
-1. Clonar el repo:
+1. Clone the repo:
 
    ```bash
    git clone git@github.com:trucdefou/hausklima.git
    cd hausklima
    ```
 
-2. Crear el `.env` a partir del ejemplo:
+2. Create `.env` from the example:
 
    ```bash
    cp .env.example .env
    chmod 600 .env
    ```
 
-   | Variable         | Descripción                                                   |
-   |------------------|---------------------------------------------------------------|
-   | `PANEL_PASSWORD` | Contraseña para entrar al panel                               |
-   | `ZIGBEE_DONGLE`  | Ruta estable del dongle: `ls /dev/serial/by-id/` para verla   |
+   | Variable         | Description                                                  |
+   |------------------|--------------------------------------------------------------|
+   | `PANEL_PASSWORD` | Password to log in to the dashboard                          |
+   | `ZIGBEE_DONGLE`  | Stable path to the dongle: run `ls /dev/serial/by-id/` to find it |
 
-3. Crear la configuración de Zigbee2MQTT en `zigbee2mqtt/data/configuration.yaml`. Esa carpeta no está en el repo porque guarda la clave de la red Zigbee:
+3. Create the Zigbee2MQTT configuration at `zigbee2mqtt/data/configuration.yaml`. That folder isn't in the repo because it holds the Zigbee network key:
 
    ```yaml
    homeassistant:
@@ -79,8 +79,8 @@ El frontend usa archivos estáticos (CoreUI, Chart.js, chartjs-plugin-zoom, flat
      base_topic: zigbee2mqtt
      server: mqtt://mosquitto:1883
    serial:
-     port: /dev/ttyACM0   # ruta dentro del contenedor; no cambiarla
-     adapter: ember       # depende del dongle
+     port: /dev/ttyACM0   # path inside the container; don't change it
+     adapter: ember       # depends on your dongle
    frontend:
      enabled: true
      port: 8080
@@ -91,40 +91,40 @@ El frontend usa archivos estáticos (CoreUI, Chart.js, chartjs-plugin-zoom, flat
      ext_pan_id: GENERATE
    ```
 
-4. Crear la carpeta de datos antes del primer arranque. Si la crea Docker, queda como root y el panel (que corre como usuario 1000) no puede escribir en ella:
+4. Create the data folder before the first start. If Docker creates it, it ends up owned by root and the dashboard (which runs as user 1000) can't write to it:
 
    ```bash
    mkdir -p datos
    ```
 
-5. Levantar los servicios:
+5. Start the services:
 
    ```bash
    docker compose up -d --build
    ```
 
-6. Emparejar los sensores desde la interfaz de Zigbee2MQTT en `http://<host>:8081` (*Permit join*).
+6. Pair the sensors from the Zigbee2MQTT UI at `http://<host>:8081` (*Permit join*).
 
-7. Entrar al panel en `http://<host>:8082` y asignar un nombre de habitación a cada sensor. En la configuración del panel también se fijan la ubicación (para el clima exterior), el intervalo de guardado y los rangos de referencia de temperatura y humedad.
+7. Open the dashboard at `http://<host>:8082` and give each sensor a room name. The dashboard settings also let you set the location (for outdoor weather), the logging interval and the reference ranges for temperature and humidity.
 
-## Datos
+## Data
 
-Todo lo que genera el panel queda en `datos/`:
+Everything the dashboard generates lives in `datos/`:
 
-| Archivo          | Contenido                                                       |
-|------------------|-----------------------------------------------------------------|
-| `clima.db`       | Base SQLite con lecturas, ventanas, termostatos y medidores     |
-| `config.json`    | Ubicación, nombres de habitaciones, intervalo y rangos          |
-| `.clave_sesion`  | Clave para firmar las cookies de sesión (se crea sola)          |
+| File             | Contents                                                     |
+|------------------|--------------------------------------------------------------|
+| `clima.db`       | SQLite database with readings, windows, thermostats and meters |
+| `config.json`    | Location, room names, interval and ranges                    |
+| `.clave_sesion`  | Key used to sign session cookies (created automatically)     |
 
-Para hacer una copia de seguridad hay que copiar `datos/` y `zigbee2mqtt/data/`. Sin esta última habría que volver a emparejar todos los sensores.
+To back up, copy `datos/` and `zigbee2mqtt/data/`. Without the latter you'd have to pair all the sensors again.
 
-## Seguridad
+## Security
 
-- Mosquitto acepta conexiones anónimas (`allow_anonymous true`). Está pensado para una red local: no expongas el puerto 1883 a internet.
-- La interfaz de Zigbee2MQTT (8081) no tiene contraseña.
-- El panel usa HTTP sin TLS. Para acceder desde fuera de casa conviene usar una VPN (WireGuard, Tailscale) o un proxy inverso con HTTPS.
+- Mosquitto accepts anonymous connections (`allow_anonymous true`). It's meant for a local network: don't expose port 1883 to the internet.
+- The Zigbee2MQTT UI (8081) has no password.
+- The dashboard uses plain HTTP without TLS. To access it from outside your home, use a VPN (WireGuard, Tailscale) or a reverse proxy with HTTPS.
 
-## Licencia
+## License
 
 [GNU AGPL v3](LICENSE)
