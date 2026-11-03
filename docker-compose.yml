@@ -1,0 +1,44 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0.20
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    environment:
+      - TZ=Europe/Berlin
+
+  zigbee2mqtt:
+    image: koenkk/zigbee2mqtt:2.6.2
+    container_name: zigbee2mqtt
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./zigbee2mqtt/data:/app/data
+      - /run/udev:/run/udev:ro
+    devices:
+      - ${ZIGBEE_DONGLE:?Falta ZIGBEE_DONGLE en .env}:/dev/ttyACM0
+    environment:
+      - TZ=Europe/Berlin
+
+  panel:
+    build: ./panel
+    container_name: panel
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    user: "1000:1000"
+    ports:
+      - "8082:8000"
+    volumes:
+      - ./datos:/datos
+    environment:
+      - TZ=Europe/Berlin
+      - PANEL_PASSWORD=${PANEL_PASSWORD:?Falta PANEL_PASSWORD en .env}
