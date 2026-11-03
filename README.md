@@ -25,6 +25,20 @@ The sensors publish their readings to Zigbee2MQTT. The dashboard receives them o
 - Available in Spanish, English and German; the language is picked from the browser.
 - Password-protected.
 
+## Screenshots
+
+**Dashboard**: current conditions per room, thermostat levels and the last 24 hours.
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+**Temperatures**: history by date range, with window openings and thermostat levels (dark theme).
+
+![Temperatures](docs/screenshots/temperatures.png)
+
+**Consumption**: heating meter consumption per period and per month.
+
+![Consumption](docs/screenshots/consumption.png)
+
 ## Architecture
 
 ```

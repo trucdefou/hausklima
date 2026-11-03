@@ -43,7 +43,9 @@ COL_TEMP = ["fecha_hora", "sensor", "temperatura", "humedad", "bateria", "linkqu
 COL_VENT = ["id", "sensor", "inicio", "fin", "nota"]
 AFUERA = "afuera"
 CONFIG_DEFECTO = {
-    "ubicacion": {"nombre": "Wiesbaden, Hessen, Alemania", "lat": 50.0826, "lon": 8.24},
+    "ubicacion": {"nombre": "Wiesbaden, Hessen, Deutschland", "lat": 50.0826, "lon": 8.24,
+                  "nombres": {"es": "Wiesbaden, Hessen, Alemania", "en": "Wiesbaden, Hesse, Germany",
+                              "de": "Wiesbaden, Hessen, Deutschland"}},
     "habitaciones": {},
     "intervalo_minutos": 5,
     "sensores_manuales": [],   # ids de sensores cuyos registros se cargan a mano (p. ej. "manual_1a2b3c4d")
@@ -380,6 +382,50 @@ def bucle_guardado():
 
 # ---------- clima de afuera ----------
 
+GEOCODING = "https://geocoding-api.open-meteo.com/v1/"
+
+
+def texto_ubicacion(r):
+    return ", ".join(x for x in (r.get("name"), r.get("admin1"), r.get("country")) if x)
+
+
+def nombres_ubicacion(u, id_geo=None):
+    """Nombre de la ubicación en cada idioma según Open-Meteo, o None si falló la consulta.
+
+    Con el id de Open-Meteo se pide directamente; sin él (configuraciones viejas) se busca por nombre
+    y se toma el resultado que coincide con las coordenadas guardadas."""
+    nombres = {}
+    try:
+        for idioma in IDIOMAS:
+            if id_geo:
+                r = obtener_json(GEOCODING + "get?" + urllib.parse.urlencode({"id": int(id_geo), "language": idioma}))
+            else:
+                busqueda = urllib.parse.urlencode({"name": u["nombre"].split(",")[0].strip(), "count": 10,
+                                                   "language": idioma, "format": "json"})
+                r = next((x for x in obtener_json(GEOCODING + "search?" + busqueda).get("results") or []
+                          if abs(x["latitude"] - u["lat"]) < 0.1 and abs(x["longitude"] - u["lon"]) < 0.1), None)
+            if r and r.get("name"):
+                nombres[idioma] = texto_ubicacion(r)[:100]
+    except Exception as e:  # noqa: BLE001
+        print(f"No se pudieron traducir los nombres de la ubicación: {e}", flush=True)
+        return None
+    return nombres
+
+
+def completar_nombres_ubicacion():
+    """Agrega los nombres por idioma a una ubicación guardada antes de que existieran."""
+    u = leer_config()["ubicacion"]
+    if "nombres" in u:
+        return
+    nombres = nombres_ubicacion(u)
+    if nombres is None:
+        return  # sin conexión: se reintenta en la próxima vuelta
+    with lock:
+        cfg = leer_config()
+        if cfg["ubicacion"].get("lat") == u["lat"] and cfg["ubicacion"].get("lon") == u["lon"]:
+            cfg["ubicacion"]["nombres"] = nombres
+            escribir_atomico(RUTA_CONFIG, json.dumps(cfg, ensure_ascii=False, indent=2))
+
 def actualizar_clima():
     u = leer_config()["ubicacion"]
     url = "https://api.open-meteo.com/v1/forecast?" + urllib.parse.urlencode({
@@ -398,6 +444,10 @@ def actualizar_clima():
 
 def bucle_clima():
     while True:
+        try:
+            completar_nombres_ubicacion()
+        except Exception as e:  # noqa: BLE001
+            print(f"Error completando la ubicación: {e}", flush=True)
         try:
             actualizar_clima()
         except Exception as e:  # noqa: BLE001
@@ -548,13 +598,64 @@ def ventanas_filtradas():
         return [fila_ventana(r) for r in con.execute(sql, params)]
 
 
-def respuesta_csv(nombre_archivo, columnas, filas):
+# Textos de los CSV exportados: nombre de archivo, encabezados y valores fijos, por idioma.
+CSV_ARCHIVOS = {
+    "temperaturas": {"es": "temperaturas", "en": "temperatures", "de": "temperaturen"},
+    "ventanas": {"es": "ventanas", "en": "windows", "de": "fenster"},
+    "termostatos": {"es": "termostatos", "en": "thermostats", "de": "thermostate"},
+    "consumo": {"es": "consumo", "en": "consumption", "de": "verbrauch"},
+}
+CSV_COLUMNAS = {
+    "fecha_hora": {"es": "Fecha y hora", "en": "Date and time", "de": "Datum und Uhrzeit"},
+    "habitacion": {"es": "Habitación", "en": "Room", "de": "Raum"},
+    "sensor": {"es": "Sensor", "en": "Sensor", "de": "Sensor"},
+    "temperatura": {"es": "Temperatura (°C)", "en": "Temperature (°C)", "de": "Temperatur (°C)"},
+    "humedad": {"es": "Humedad (%)", "en": "Humidity (%)", "de": "Luftfeuchtigkeit (%)"},
+    "bateria": {"es": "Batería (%)", "en": "Battery (%)", "de": "Batterie (%)"},
+    "linkquality": {"es": "Calidad de enlace", "en": "Link quality", "de": "Verbindungsqualität"},
+    "ultima_lectura": {"es": "Última lectura del sensor", "en": "Last sensor reading", "de": "Letzte Sensormessung"},
+    "inicio": {"es": "Apertura", "en": "Opened", "de": "Geöffnet"},
+    "fin": {"es": "Cierre", "en": "Closed", "de": "Geschlossen"},
+    "nota": {"es": "Nota", "en": "Note", "de": "Notiz"},
+    "id": {"es": "ID", "en": "ID", "de": "ID"},
+    "nivel": {"es": "Nivel", "en": "Level", "de": "Stufe"},
+    "desde": {"es": "Desde", "en": "From", "de": "Von"},
+    "hasta": {"es": "Hasta", "en": "To", "de": "Bis"},
+    "medidor": {"es": "Medidor", "en": "Meter", "de": "Zähler"},
+    "unidad": {"es": "Unidad", "en": "Unit", "de": "Einheit"},
+    "periodo": {"es": "Período", "en": "Period", "de": "Zeitraum"},
+    "dias": {"es": "Días", "en": "Days", "de": "Tage"},
+    "lectura": {"es": "Lectura", "en": "Reading", "de": "Zählerstand"},
+    "consumo": {"es": "Consumo", "en": "Consumption", "de": "Verbrauch"},
+    "consumo_por_dia": {"es": "Consumo por día", "en": "Consumption per day", "de": "Verbrauch pro Tag"},
+    "acumulado": {"es": "Acumulado", "en": "Cumulative", "de": "Kumuliert"},
+    "reinicio": {"es": "Medidor reiniciado", "en": "Meter reset", "de": "Zähler zurückgesetzt"},
+    "tipo": {"es": "Tipo", "en": "Type", "de": "Art"},
+}
+CSV_VALORES = {
+    "lectura": {"es": "Lectura", "en": "Reading", "de": "Ablesung"},
+    "cierre": {"es": "Cierre de período", "en": "Period close", "de": "Periodenabschluss"},
+    "inicio_periodo": {"es": "Inicio de período", "en": "Period start", "de": "Periodenbeginn"},
+    "entrada": {"es": "Lectura de entrada", "en": "Move-in reading", "de": "Einzugsablesung"},
+    "mudanza": {"es": "Mudanza", "en": "Move-in", "de": "Einzug"},
+    "si": {"es": "sí", "en": "yes", "de": "ja"},
+    "no": {"es": "no", "en": "no", "de": "nein"},
+}
+
+
+def valor_csv(clave, idioma):
+    return CSV_VALORES.get(clave, {}).get(idioma, clave)
+
+
+def respuesta_csv(archivo, columnas, filas, idioma):
     buf = io.StringIO()
-    w = csv.DictWriter(buf, fieldnames=columnas, extrasaction="ignore")
-    w.writeheader()
-    w.writerows(filas)
-    return Response(buf.getvalue(), mimetype="text/csv",
-                    headers={"Content-Disposition": f'attachment; filename="{nombre_archivo}"'})
+    buf.write("﻿")  # BOM: así Excel abre bien los acentos y las diéresis
+    w = csv.writer(buf)
+    w.writerow([CSV_COLUMNAS.get(c, {}).get(idioma, c) for c in columnas])
+    w.writerows([[f.get(c, "") for c in columnas] for f in filas])
+    nombre = CSV_ARCHIVOS[archivo].get(idioma, archivo) + ".csv"
+    return Response(buf.getvalue(), mimetype="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{nombre}"'})
 
 
 # ---------- rutas ----------
@@ -703,7 +804,7 @@ def api_temperaturas_csv():
     cfg = leer_config()
     idioma = idioma_pedido()
     filas = [{**f, "habitacion": nombre_de(f["sensor"], cfg, idioma)} for f in leer_temperaturas(*filtros_temperaturas())]
-    return respuesta_csv("temperaturas.csv", ["fecha_hora", "habitacion"] + COL_TEMP[1:], filas)
+    return respuesta_csv("temperaturas", ["fecha_hora", "habitacion"] + COL_TEMP[1:], filas, idioma)
 
 
 @app.get("/api/ventanas")
@@ -717,7 +818,7 @@ def api_ventanas_csv():
     cfg = leer_config()
     idioma = idioma_pedido()
     filas = [{**v, "habitacion": nombre_de(v["sensor"], cfg, idioma)} for v in ventanas_filtradas()]
-    return respuesta_csv("ventanas.csv", ["habitacion", "inicio", "fin", "nota", "sensor", "id"], filas)
+    return respuesta_csv("ventanas", ["habitacion", "inicio", "fin", "nota", "sensor", "id"], filas, idioma)
 
 
 @app.post("/api/ventanas")
@@ -775,7 +876,7 @@ def api_termostatos_csv():
     cfg = leer_config()
     idioma = idioma_pedido()
     filas = [{**t, "habitacion": nombre_de(t["sensor"], cfg, idioma), "desde": t["fecha_hora"]} for t in termostatos_filtrados()]
-    return respuesta_csv("termostatos.csv", ["habitacion", "nivel", "desde", "hasta", "sensor", "id"], filas)
+    return respuesta_csv("termostatos", ["habitacion", "nivel", "desde", "hasta", "sensor", "id"], filas, idioma)
 
 
 @app.post("/api/termostatos")
@@ -1193,10 +1294,11 @@ def api_consumo_csv():
                               "unidad": m["unidad"], "desde": f["desde"], "hasta": f["fecha_hora"],
                               "dias": round(f["dias"], 2), "lectura": f["valor"], "consumo": round(f["consumo"], 3),
                               "consumo_por_dia": round(f["consumo"] / f["dias"], 3) if f["dias"] else "",
-                              "acumulado": round(f["acumulado"], 3), "reinicio": int(f["reinicio"] or f["reinicio_auto"]),
-                              "tipo": f["tipo"], "periodo": f["periodo_nombre"]})
-    return respuesta_csv("consumo.csv", ["medidor", "habitacion", "unidad", "periodo", "desde", "hasta", "dias", "lectura", "consumo",
-                                         "consumo_por_dia", "acumulado", "reinicio", "tipo"], filas)
+                              "acumulado": round(f["acumulado"], 3),
+                              "reinicio": valor_csv("si" if f["reinicio"] or f["reinicio_auto"] else "no", idioma),
+                              "tipo": valor_csv(f["tipo"], idioma), "periodo": f["periodo_nombre"]})
+    return respuesta_csv("consumo", ["medidor", "habitacion", "unidad", "periodo", "desde", "hasta", "dias", "lectura", "consumo",
+                                     "consumo_por_dia", "acumulado", "reinicio", "tipo"], filas, idioma)
 
 
 # ---------- sensores manuales ----------
@@ -1278,6 +1380,13 @@ def api_config():
 @app.put("/api/config")
 def api_guardar_config():
     datos = request.get_json(silent=True) or {}
+    u = datos.get("ubicacion")
+    nombres = None
+    if u and isinstance(u, dict) and u.get("id"):  # se consulta antes de tomar el lock (son pedidos a internet)
+        try:
+            nombres = nombres_ubicacion(u, u["id"])
+        except (TypeError, ValueError):
+            abort(400, "err.ubicacion")
     with lock:
         cfg = leer_config()
         if "habitaciones" in datos:
@@ -1321,6 +1430,9 @@ def api_guardar_config():
             if not (-90 <= lat <= 90 and -180 <= lon <= 180):
                 abort(400, "err.ubicacion")
             cfg["ubicacion"] = {"nombre": str(u.get("nombre") or f"{lat}, {lon}")[:100], "lat": lat, "lon": lon}
+            if nombres:
+                cfg["ubicacion"]["nombres"] = nombres
+            # sin nombres (búsqueda sin id o sin conexión) los completa el hilo del clima
         escribir_atomico(RUTA_CONFIG, json.dumps(cfg, ensure_ascii=False, indent=2))
     # avisar a los hilos recién después de escribir la config, para que lean el valor nuevo
     if datos.get("ubicacion"):
@@ -1335,14 +1447,14 @@ def api_buscar_ubicacion():
     q = request.args.get("q", "").strip()
     if len(q) < 2:
         return jsonify([])
-    url = "https://geocoding-api.open-meteo.com/v1/search?" + urllib.parse.urlencode(
+    url = GEOCODING + "search?" + urllib.parse.urlencode(
         {"name": q, "count": 8, "language": idioma_pedido(), "format": "json"})
     try:
         res = obtener_json(url).get("results") or []
     except Exception:  # noqa: BLE001
         abort(502, "err.busqueda")
-    return jsonify([{"nombre": ", ".join(x for x in (r.get("name"), r.get("admin1"), r.get("country")) if x),
-                     "lat": r["latitude"], "lon": r["longitude"]} for r in res])
+    return jsonify([{"id": r.get("id"), "nombre": texto_ubicacion(r), "lat": r["latitude"], "lon": r["longitude"]}
+                    for r in res])
 
 
 def main():

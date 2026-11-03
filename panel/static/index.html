@@ -1161,6 +1161,9 @@ function hace(s) {
   if (min < 60 * 24) return t('t.hace', { x: minutosTexto(min) });
   return t('t.hace', { x: t('t.dias', { n: Math.floor(min / 1440) }) });
 }
+// Nombre de la ubicación en el idioma activo (las configuraciones viejas solo tienen "nombre")
+const nombreUbicacion = () => estado.ubicacion?.nombres?.[idioma] || estado.ubicacion?.nombre || '';
+
 function nombreDe(id) {
   if (id === 'afuera') return t('afuera');
   return estado.sensores.find(s => s.id === id)?.nombre_configurado || `${t('sensor')} ${id.slice(-4)}`;
@@ -1360,7 +1363,7 @@ async function cargarEstado() {
 
 function pieYCabecera() {
   const a = estado.afuera || {};
-  $('#hora-afuera').innerHTML = a.temperatura != null ? `<i class="cil-location-pin me-1"></i>${esc((a.ubicacion || '').split(',')[0])} ${num(a.temperatura)} °C` : '';
+  $('#hora-afuera').innerHTML = a.temperatura != null ? `<i class="cil-location-pin me-1"></i>${esc(nombreUbicacion().split(',')[0])} ${num(a.temperatura)} °C` : '';
   $('#pie-intervalo').textContent = estado.intervalo_minutos ? t('pie.guardando', { n: estado.intervalo_minutos }) : '';
 }
 
@@ -1373,7 +1376,7 @@ function renderTarjetas() {
     html += `<div class="temp-grande my-2">${num(a.temperatura)} °C</div>
       <div class="small">${clima(a.codigo)} · ${t('sensacion')} ${num(a.sensacion)} °C</div>
       <div class="small"><i class="cil-drop"></i> ${num(a.humedad, 0)} % · ${t('viento')} ${num(a.viento, 0)} km/h</div>
-      <div class="small text-white-50 mt-1"><i class="cil-location-pin"></i> ${esc(a.ubicacion)} · ${hace(a.hora)}</div>`;
+      <div class="small text-white-50 mt-1"><i class="cil-location-pin"></i> ${esc(nombreUbicacion())} · ${hace(a.hora)}</div>`;
     if (a.error) html += `<div class="small mt-1">⚠ ${t('clima.error_ultimo')}</div>`;
   } else {
     html += `<div class="small mt-2">${a.error ? t('clima.no_se_pudo') : t('cargando')}</div>`;
@@ -2954,7 +2957,7 @@ function renderAjustes() {
   $('#a-temp-max').value = estado.temp_ref?.max ?? 22;
   $('#a-hum-min').value = estado.humedad_ref?.min ?? 40;
   $('#a-hum-max').value = estado.humedad_ref?.max ?? 60;
-  $('#a-ubic-actual').textContent = estado.ubicacion?.nombre || '';
+  $('#a-ubic-actual').textContent = nombreUbicacion();
   $('#a-resultados').innerHTML = '';
   ubicPendiente = null;
 }
