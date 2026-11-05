@@ -21,6 +21,16 @@
 <link rel="stylesheet" href="/static/vendor/icons/css/free.min.css">
 <link rel="stylesheet" href="/static/vendor/flatpickr/flatpickr.min.css">
 <style>
+  /* Transición al cambiar de sección y barra de carga mientras se piden datos */
+  @keyframes entrada { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  [id^="tab-"]:not([hidden]) { animation: entrada .3s ease-out; }
+  [id^="tab-"] { transition: opacity .2s; }
+  body.cargando [id^="tab-"]:not([hidden]) { opacity: .55; pointer-events: none; }
+  #barra-carga { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 2000; overflow: hidden; opacity: 0; transition: opacity .25s; pointer-events: none; }
+  #barra-carga.activa { opacity: 1; }
+  #barra-carga::before { content: ''; position: absolute; top: 0; bottom: 0; width: 40%; background: var(--cui-primary); border-radius: 2px; animation: barra-carga 1.1s ease-in-out infinite; }
+  @keyframes barra-carga { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+  @media (prefers-reduced-motion: reduce) { [id^="tab-"]:not([hidden]) { animation: none; } #barra-carga::before { animation-duration: 3s; } }
   .wrapper { transition: padding .15s; }
   @media (min-width: 992px) { .sidebar.sidebar-fixed:not(.hide) ~ .wrapper { padding-inline-start: var(--cui-sidebar-width, 16rem); } }
   .sidebar-brand { font-weight: 600; font-size: 1.05rem; }
@@ -31,8 +41,12 @@
   .card-habitacion.abierta { box-shadow: 0 0 0 2px var(--cui-warning); }
   .grafico { position: relative; height: 320px; }
   .tabular { font-variant-numeric: tabular-nums; }
-  td.nota { white-space: normal; min-width: 140px; }
   .table td, .table th { white-space: nowrap; }
+  .table td.nota { white-space: normal; min-width: 7rem; max-width: 16rem; overflow-wrap: anywhere; }
+  .nota-corta { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+  .table .col-efecto { white-space: normal; min-width: 11rem; }
+  /* Las acciones quedan a la vista aunque la tabla se desplace de costado */
+  .table .col-acciones { position: sticky; right: 0; background-color: var(--cui-card-bg, var(--cui-body-bg)); box-shadow: inset 1px 0 var(--cui-border-color); }
   .termo-escala { position: relative; height: 1.1rem; font-size: .7rem; color: var(--cui-secondary-color); }
   .termo-escala span { position: absolute; transform: translateX(-50%); line-height: 1; }
   .termo-valor { min-width: 2.6rem; text-align: center; }
@@ -96,6 +110,7 @@
     <li class="nav-item"><a class="nav-link" href="#temperaturas" data-tab="temperaturas"><i class="nav-icon cil-chart-line"></i> <span data-i18n="nav.temperaturas"></span></a></li>
     <li class="nav-item"><a class="nav-link" href="#ventanas" data-tab="ventanas"><i class="nav-icon cil-window"></i> <span data-i18n="nav.ventanas"></span></a></li>
     <li class="nav-item"><a class="nav-link" href="#termostatos" data-tab="termostatos"><i class="nav-icon cil-fire"></i> <span data-i18n="nav.termostatos"></span></a></li>
+    <li class="nav-item"><a class="nav-link" href="#metricas" data-tab="metricas"><i class="nav-icon cil-graph"></i> <span data-i18n="nav.metricas"></span></a></li>
     <li class="nav-title" data-i18n="nav.calefaccion"></li>
     <li class="nav-item"><a class="nav-link" href="#lecturas" data-tab="lecturas"><i class="nav-icon cil-notes"></i> <span data-i18n="nav.lecturas"></span></a></li>
     <li class="nav-item"><a class="nav-link" href="#consumo" data-tab="consumo"><i class="nav-icon cil-chart"></i> <span data-i18n="nav.consumo"></span></a></li>
@@ -122,6 +137,16 @@
         <li class="nav-item d-none d-md-flex align-items-center text-body-secondary small" id="hora-afuera"></li>
         <li class="nav-item py-1"><div class="vr h-100 mx-2 text-body text-opacity-75"></div></li>
         <li class="nav-item dropdown">
+          <button class="btn btn-link nav-link py-2 px-2 d-flex align-items-center position-relative" type="button" id="campana" data-coreui-toggle="dropdown" aria-expanded="false" data-i18n-aria="sen.notificaciones">
+            <i class="cil-bell fs-5"></i>
+            <span class="position-absolute badge rounded-pill text-bg-danger" id="campana-contador" style="top:0;right:0;font-size:.65rem" hidden></span>
+          </button>
+          <div class="dropdown-menu dropdown-menu-end pt-0" style="--cui-dropdown-min-width:17rem">
+            <div class="dropdown-header fw-semibold border-bottom mb-1" data-i18n="sen.notificaciones"></div>
+            <div id="campana-lista"></div>
+          </div>
+        </li>
+        <li class="nav-item dropdown">
           <button class="btn btn-link nav-link py-2 px-2 d-flex align-items-center gap-1" type="button" data-coreui-toggle="dropdown" aria-expanded="false" data-i18n-aria="idioma">
             <i class="cil-language fs-5"></i><span class="small fw-semibold" id="idioma-actual"></span>
           </button>
@@ -145,6 +170,7 @@
     </div>
   </header>
 
+  <div id="barra-carga" role="progressbar" aria-label="Cargando"></div>
   <div class="body flex-grow-1">
     <div class="container-lg px-4">
 
@@ -163,6 +189,14 @@
           <div class="card-body">
             <div class="grafico"><canvas id="graf-panel"></canvas></div>
             <div class="small text-body-secondary mt-2"><span data-i18n="grafico.ayuda"></span> · <span data-i18n="panel.franjas"></span> <span data-i18n="grafico.ayuda_termo"></span></div>
+          </div>
+        </div>
+        <div class="card mb-4">
+          <div class="card-header"><strong data-i18n="panel.consumo24"></strong></div>
+          <div class="card-body">
+            <div class="grafico"><canvas id="graf-consumo24"></canvas></div>
+            <div class="text-body-secondary py-4 text-center" id="consumo24-vacio" hidden data-i18n="panel.consumo24_vacio"></div>
+            <div class="small text-body-secondary mt-2" data-i18n="panel.consumo24_ayuda"></div>
           </div>
         </div>
       </section>
@@ -202,7 +236,6 @@
           <div class="table-responsive">
             <table class="table table-hover align-middle mb-0 tabular" id="t-tabla"></table>
           </div>
-          <div class="card-footer text-center" id="t-mas" hidden></div>
         </div>
       </section>
 
@@ -297,6 +330,44 @@
         </div>
       </section>
 
+      <!-- MÉTRICAS -->
+      <section id="tab-metricas" hidden>
+        <h2 class="h5 mb-3"><i class="cil-bolt me-2"></i><span data-i18n="ene.titulo"></span></h2>
+        <div class="card mb-4" id="mt-energia-vacio" hidden><div class="card-body"></div></div>
+        <div id="mt-energia-bloque">
+          <div class="row g-3 mb-4" id="mt-kpi-energia"></div>
+          <div class="card mb-4">
+            <div class="card-header d-flex align-items-center flex-wrap gap-2">
+              <strong data-i18n="ene.anual"></strong>
+              <div class="btn-group btn-group-sm ms-auto" role="group" id="mt-anual-vista">
+                <button type="button" class="btn btn-outline-secondary" data-vista="consumo" data-i18n="ene.grupo_consumo"></button>
+                <button type="button" class="btn btn-outline-secondary" data-vista="costos" data-i18n="ene.grupo_costos"></button>
+                <button type="button" class="btn btn-outline-secondary" data-vista="edificio" data-i18n="ene.edificio_titulo"></button>
+              </div>
+            </div>
+            <div class="table-responsive"><table class="table table-hover align-middle mb-0 tabular" id="mt-anual"></table></div>
+          </div>
+          <div class="card mb-4">
+            <div class="card-header d-flex align-items-center flex-wrap gap-2">
+              <strong data-i18n="ene.por_habitacion"></strong>
+              <select class="form-select form-select-sm ms-auto" style="max-width:200px" id="mt-sala-periodo" data-i18n-aria="per.periodo"></select>
+            </div>
+            <div class="table-responsive"><table class="table table-hover align-middle mb-0 tabular" id="mt-salas"></table></div>
+          </div>
+        </div>
+        <h2 class="h5 mb-3 mt-5"><i class="cil-drop me-2"></i><span data-i18n="met.clima_titulo"></span></h2>
+        <div class="row g-3 mb-4" id="mt-resumen"></div>
+        <div class="card mb-4">
+          <div class="card-header"><strong data-i18n="met.humedad"></strong></div>
+          <div class="table-responsive"><table class="table table-hover align-middle mb-0 tabular" id="mt-humedad"></table></div>
+        </div>
+        <div class="card mb-4">
+          <div class="card-header"><strong data-i18n="met.temperatura"></strong></div>
+          <div class="table-responsive"><table class="table table-hover align-middle mb-0 tabular" id="mt-temperatura"></table></div>
+        </div>
+        <p class="small text-body-secondary mb-4" data-i18n="met.nota"></p>
+      </section>
+
       <!-- CONSUMO -->
       <section id="tab-consumo" hidden>
         <div class="card mb-4">
@@ -324,13 +395,13 @@
           </div>
           <div class="col-xl-6">
             <div class="card h-100">
-              <div class="card-header"><strong id="cs-barras-titulo"></strong></div>
+              <div class="card-header"><strong id="cs-barras-titulo"></strong> <i class="cil-info ms-1 text-body-secondary" role="img" tabindex="0" data-i18n-title="cons.frio_ayuda" data-i18n-aria="cons.frio_ayuda"></i></div>
               <div class="card-body"><div class="grafico"><canvas id="graf-barras"></canvas></div></div>
             </div>
           </div>
         </div>
         <div class="card mb-4" id="cs-comp-card" hidden>
-          <div class="card-header"><strong data-i18n="per.comparacion"></strong></div>
+          <div class="card-header"><strong data-i18n="per.comparacion"></strong> <i class="cil-info ms-1 text-body-secondary" role="img" tabindex="0" data-i18n-title="per.proy_calculo" data-i18n-aria="per.proy_calculo"></i></div>
           <div class="card-body">
             <div class="grafico"><canvas id="graf-comp"></canvas></div>
           </div>
@@ -443,6 +514,32 @@
       <!-- AJUSTES -->
       <section id="tab-ajustes" hidden>
         <div class="row g-4 mb-4">
+          <div class="col-12">
+            <div class="card h-100">
+              <div class="card-header"><i class="cil-wifi-signal-4 me-2"></i><strong data-i18n="sen.titulo"></strong></div>
+              <div class="card-body">
+                <p class="small text-body-secondary" data-i18n="sen.ayuda"></p>
+                <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+                  <thead><tr><th data-i18n="sensor"></th><th data-i18n="sen.estado"></th><th data-i18n="sen.senal"></th><th class="d-none d-md-table-cell" data-i18n="sen.bateria"></th><th data-i18n="sen.ultima"></th></tr></thead>
+                  <tbody id="a-senales"></tbody>
+                </table></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="card h-100">
+              <div class="card-header"><i class="cil-list me-2"></i><strong data-i18n="sen.log"></strong></div>
+              <div class="card-body">
+                <p class="small text-body-secondary" data-i18n="sen.log_ayuda"></p>
+                <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+                  <thead><tr><th data-i18n="sensor"></th><th data-i18n="sen.ultima"></th><th data-i18n="sen.detectado"></th><th data-i18n="sen.volvio"></th><th data-i18n="sen.duracion"></th></tr></thead>
+                  <tbody id="a-cortes"></tbody>
+                </table></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row g-4 mb-4">
           <div class="col-lg-7">
             <div class="card h-100">
               <div class="card-header"><i class="cil-home me-2"></i><strong data-i18n="aj.habitaciones"></strong></div>
@@ -462,6 +559,12 @@
                   <span class="input-group-text" data-i18n="minutos"></span>
                 </div>
                 <div class="form-text"><span data-i18n="aj.fila_por"></span> <code>datos/clima.db</code>. <span data-i18n="aj.exportar"></span></div>
+                <label class="form-label mt-3" for="a-vivo" data-i18n="aj.vivo"></label>
+                <div class="input-group" style="max-width:240px">
+                  <input type="number" class="form-control" id="a-vivo" min="3" max="300" step="1">
+                  <span class="input-group-text" data-i18n="aj.segundos"></span>
+                </div>
+                <div class="form-text" data-i18n="aj.vivo_ayuda"></div>
               </div>
             </div>
             <div class="card">
@@ -503,6 +606,13 @@
               </div>
             </div>
             <div class="card">
+              <div class="card-header"><i class="cil-cloud-download me-2"></i><strong data-i18n="aj.todo_titulo"></strong></div>
+              <div class="card-body">
+                <p class="small text-body-secondary" data-i18n="aj.todo_ayuda"></p>
+                <a class="btn btn-outline-primary" id="a-todo" href="/api/todo.zip"><i class="cil-cloud-download me-1"></i><span data-i18n="aj.todo_btn"></span></a>
+              </div>
+            </div>
+            <div class="card">
               <div class="card-header"><i class="cil-pencil me-2"></i><strong data-i18n="manual.card_titulo"></strong></div>
               <div class="card-body">
                 <p class="small text-body-secondary" data-i18n="manual.ayuda"></p>
@@ -517,6 +627,25 @@
         </div>
         <div class="d-flex justify-content-end align-items-center gap-3 mb-4">
           <button class="btn btn-primary" id="a-guardar" data-i18n="aj.guardar"></button>
+        </div>
+        <div class="card mb-4">
+          <div class="card-header"><i class="cil-home me-2"></i><strong data-i18n="viv.titulo"></strong></div>
+          <div class="card-body">
+            <p class="small text-body-secondary" data-i18n="viv.ayuda"></p>
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" role="switch" id="v-es-dpto">
+              <label class="form-check-label" for="v-es-dpto" data-i18n="viv.es_dpto"></label>
+            </div>
+            <div class="row g-3 mb-3">
+              <div class="col-6 col-md-3"><label class="form-label" for="v-m2-total" id="v-m2-total-titulo" data-i18n="viv.m2_casa"></label><input type="number" class="form-control" id="v-m2-total" min="0" step="0.1"></div>
+              <div class="col-6 col-md-3 solo-dpto"><label class="form-label" for="v-m2-edificio" data-i18n="viv.m2_edificio"></label><input type="number" class="form-control" id="v-m2-edificio" min="0" step="0.1"></div>
+            </div>
+            <h3 class="h6" data-i18n="viv.habitaciones"></h3>
+            <div class="row g-3 mb-4" id="v-m2-medidores"></div>
+            <h3 class="h6" data-i18n="viv.facturas"></h3>
+            <div class="table-responsive"><table class="table table-sm align-middle mb-3" id="v-facturas"></table></div>
+            <button class="btn btn-primary" id="v-guardar" data-i18n="viv.guardar"></button>
+          </div>
         </div>
       </section>
 
@@ -664,12 +793,14 @@
 // ======================================================================
 const I18N = {
   es: {
+    'viv.titulo': 'Vivienda y facturas', 'viv.ayuda': 'Las unidades del medidor no son kWh. Con los kWh de la factura anual, el panel calcula cuánto vale cada unidad y el consumo por m². Dejá vacío lo que no tengas.', 'viv.es_dpto': 'Es un departamento (parte de un edificio)', 'viv.m2_casa': 'Superficie de la casa (m²)', 'viv.m2_dpto': 'Superficie del departamento (m²)', 'viv.m2_edificio': 'Superficie del edificio (m²)', 'viv.habitaciones': 'Superficie por medidor', 'viv.facturas': 'Facturas anuales', 'viv.kwh_vivienda': 'kWh vivienda', 'viv.unidades_vivienda': 'Unidades en la factura', 'viv.kwh_edificio': 'kWh edificio', 'viv.unidades_edificio': 'Unidades del edificio', 'viv.guardar': 'Guardar vivienda', 'viv.precio_kwh': 'Precio (€/kWh)', 'ene.precio': '€/kWh', 'viv.pagado': 'Pagado (€)', 'ene.pagado': 'Pagado (€)', 'ene.pagado_ayuda': 'Monto real pagado por ese período, según la factura. Incluye lo que no entra en el costo calculado, como costos fijos, medición o servicios.', 'ene.costo': 'Costo (€)', 'ene.proyeccion': 'Estimación a fin de año', 'ene.proy_kwh': 'Cierre est. (kWh)', 'ene.proy_costo': 'Cierre est. (€)', 'ene.proyeccion_ayuda': 'Lo esperado al cierre del período en curso: unidades proyectadas según el frío × kWh/unidad medio de las facturas anteriores × €/kWh. Es una estimación: asume un invierno igual al anterior y seguir calefaccionando igual. El valor por unidad varió mucho entre años, así que el margen es amplio.', 'ene.precio_ayuda': 'Precio de la energía por kWh cargado para ese año. Si un período no lo tiene, se usa el último conocido, con ≈.', 'ene.costo_ayuda': 'kWh × precio por kWh. Es el costo de la energía consumida: la factura real puede sumar costos fijos, base o de servicio, así que no tiene por qué coincidir con el total facturado.', 'err.vivienda': 'Los valores deben ser mayores que 0', 'ene.titulo': 'Energía y costos', 'ene.anual': 'Comparación anual', 'ene.por_habitacion': 'Por habitación', 'ene.grupo_consumo': 'Consumo', 'ene.grupo_costos': 'Costos', 'ene.participacion': 'Participación', 'ene.kpi_intensidad': 'Intensidad {p}', 'ene.kpi_costo': 'Costo de energía {p}', 'ene.kpi_actual': '{p} a la fecha', 'ene.kpi_fin': 'Estimación de cierre {p}', 'ene.pagado_val': 'Pagado: {v} €', 'met.clima_titulo': 'Clima interior', 'ene.vacio': 'Falta cargar los kWh de la factura.', 'ene.ir_ajustes': 'Ir a Ajustes', 'ene.unidades': 'Unidades', 'ene.factor': 'kWh/unidad', 'ene.factor_ayuda': 'kWh de la factura ÷ unidades del período. Dice cuánta energía vale cada unidad del medidor.', 'ene.factor_medio_ayuda': 'kWh de la factura ÷ unidades del período. El período sin factura usa la media de los anteriores: todos los kWh ÷ todas las unidades, y en un departamento con los totales del edificio.', 'ene.kwh': 'kWh', 'ene.kwh_m2': 'kWh/m²', 'ene.w_m2': 'W/m²', 'ene.w_m2_ayuda': 'Potencia media: kWh ÷ m² ÷ horas del período. Es un promedio de todo el período, no el consumo de una hora concreta. Si el período empezó con la mudanza, cuenta desde ese día.', 'ene.costos_titulo': 'Costos', 'ene.edificio_titulo': 'Edificio', 'ene.kwh_edificio': 'kWh edificio', 'ene.kwh_m2_edificio': 'kWh/m² edificio', 'ene.kwh_m2_vivienda': 'kWh/m² vivienda', 'ene.vs_edificio': 'vs. edificio', 'ene.vs_edificio_ayuda': 'Diferencia de kWh/m² de tu vivienda frente al promedio del edificio. Negativo significa que consumís menos por m². No se calcula si el período incluye la mudanza, porque no serían los mismos meses.', 'ene.estimado_ayuda': 'Este período todavía no tiene factura: se usa el kWh/unidad medio de las anteriores (todos los kWh ÷ todas las unidades).', 'ene.fuente_edificio': 'Calculado con los kWh y unidades del edificio, porque falta el dato propio de la vivienda.', 'ene.edificio': 'según edificio',
+    'nav.metricas': 'Métricas', 'met.humedad': 'Humedad relativa (HR)', 'met.temperatura': 'Temperatura', 'met.nota': 'Son medianas calculadas solo con lecturas realmente medidas. Las horas con el sensor caído no cuentan. Con más días de datos, estos valores serán más firmes.', 'met.pierde': 'ΔHR por ventilación', 'met.recupera': 'Recuperación de HR', 'met.enfria': 'ΔT por ventilación', 'met.noche': 'Caída térmica nocturna', 'met.puntos': '%HR', 'met.puntos_h': '%HR/h', 'met.n_aperturas': 'mediana · {n} aperturas', 'met.n_noches': 'mediana · {n} noches', 'met.col_aperturas': 'Aperturas', 'met.col_pierde': 'ΔHR (%HR)', 'met.col_velocidad': 'Tasa de caída (%HR/min)', 'met.col_recupera': 'Recuperación 1 h (%HR)', 'met.col_enfria': 'ΔT (°C)', 'met.col_temp_recupera': 'Recuperación 1 h (°C)', 'met.col_noches': 'Noches', 'met.col_noche': 'Caída 23–06 h (°C)', 'met.col_afuera': 'T exterior', 'met.pierde_ayuda': 'ΔHR: variación de humedad relativa, en puntos porcentuales (%HR), desde la lectura previa a abrir hasta el mínimo de la apertura. Es la mediana de las aperturas medidas.', 'met.velocidad_ayuda': 'Tasa de caída: %HR que baja por minuto, desde que se abre hasta el mínimo.', 'met.recupera_ayuda': 'Recuperación: %HR que vuelve a subir en la hora siguiente al mínimo. Viene de la humedad que liberan paredes y muebles, y de la actividad en la casa. Entre paréntesis, cuántas aperturas lo permiten medir: se excluyen las interrumpidas por otra apertura.', 'met.enfria_ayuda': 'ΔT: variación de temperatura interior, desde la lectura previa a abrir hasta el mínimo de la apertura. Es la mediana de las aperturas medidas.', 'met.temp_recupera_ayuda': 'Recuperación: grados que sube la temperatura en la hora siguiente al mínimo. Si es negativa, la habitación siguió enfriándose.', 'met.noche_ayuda': 'Caída térmica nocturna: variación de temperatura entre las 23:00 y las 06:00, en noches sin ventanas abiertas. Incluye la calefacción que haya estado funcionando, así que no mide la aislación por sí sola.',
     'app.titulo': 'Clima de casa',
     'nav.monitoreo': 'Monitoreo', 'nav.panel': 'Panel', 'nav.temperaturas': 'Temperaturas', 'nav.ventanas': 'Ventanas',
     'nav.sistema': 'Sistema', 'nav.ajustes': 'Ajustes', 'nav.salir': 'Salir',
     'menu': 'Menú', 'cerrar': 'Cerrar', 'idioma': 'Idioma',
     'tema.titulo': 'Tema', 'tema.claro': 'Claro', 'tema.oscuro': 'Oscuro', 'tema.auto': 'Automático',
-    'panel.registrar_pasada': 'Registrar apertura pasada', 'panel.ultimas24': 'Últimas 24 horas',
+    'panel.registrar_pasada': 'Registrar apertura pasada', 'panel.ultimas24': 'Hoy (00:00 – 24:00)', 'panel.consumo24': 'Consumo acumulado de hoy (00:00 – 24:00)', 'panel.consumo24_ayer': '{n} (día anterior)', 'panel.consumo24_vacio': 'Todavía no hay suficientes lecturas de los medidores hoy.', 'panel.consumo24_ayuda': 'Parte de 0 a las 00:00 y se va dibujando a lo largo del día. Los puntos son lecturas cargadas a mano; entre punto y punto la línea es una estimación. La línea punteada es el día anterior completo, a la misma hora.',
     'panel.franjas': 'Líneas verticales = apertura y cierre de ventana; la zona sombreada es el tiempo abierta.',
     'filtros': 'Filtros', 'desde': 'Desde', 'hasta': 'Hasta', 'filtrar': 'Filtrar', 'buscar': 'Buscar',
     'habitacion': 'Habitación', 'todas': 'Todas', 'minutos': 'minutos',
@@ -683,8 +814,8 @@ const I18N = {
     'sin_datos_periodo': 'Sin datos en este período', 'sin_datos': 'Sin datos',
     'prom': 'prom.', 'min': 'mín', 'max': 'máx',
     'temp.registros': 'Registros ({n})', 'fecha_hora': 'Fecha y hora', 'temp_corta': 'Temp.', 'humedad': 'Humedad', 'bateria': 'Batería',
-    'sin_registros': 'Sin registros para este filtro', 'mostrar_mas': 'Mostrar más ({n} restantes)',
-    'vent.titulo': 'Aperturas de ventana', 'vent.manual': 'Registro manual',
+    'sin_registros': 'Sin registros para este filtro', 'pag.rango': '{a}–{b} de {n}', 'pag.pagina': 'Página {p} de {n}', 'pag.primera': 'Primera página', 'pag.anterior': 'Página anterior', 'pag.siguiente': 'Página siguiente', 'pag.ultima': 'Última página',
+    'vent.titulo': 'Aperturas de ventana', 'vent.efecto': 'Efecto en la temperatura', 'vent.efecto_ayuda': 'Temperatura antes de abrir → la más baja hasta 30 min después de cerrar (y a los cuántos minutos)', 'vent.sin_datos': 'sin datos', 'vent.precision': 'Los valores no son muy precisos: dependen del momento en que se tomó cada lectura (el panel guarda una cada pocos minutos).', 'vent.aprox_ayuda': 'Estimado: no había lectura justo antes de abrir y se usó la más cercana', 'vent.caida_media': 'Caída media', 'vent.caida_hum_media': 'ΔHR media', 'vent.caida_hum_sub': '{n} aperturas', 'vent.caida_media_sub': 'por apertura', 'vent.manual': 'Registro manual',
     'total': 'Total', 'n_aperturas': '{n} aperturas', 'abiertas_total': '{d} abiertas',
     'conf.titulo': 'Confirmar', 'conf.si': 'Sí, guardar', 'conf.nuevo': '¿Guardar este nuevo registro?', 'conf.cambios': '¿Guardar los cambios?',
     'conf.termo': '¿Poner el termostato de {h} en {n}?', 'conf.abrir': '¿Registrar que se abrió la ventana en {h}?', 'conf.cerrar': '¿Registrar que se cerró la ventana en {h}?',
@@ -694,10 +825,11 @@ const I18N = {
     'dlg.nuevo': 'Nuevo registro de ventana', 'dlg.editar': 'Editar registro de ventana',
     'dlg.vacio': 'Vacío si sigue abierta', 'dlg.nota': 'Nota (opcional)',
     'aj.habitaciones': 'Habitaciones',
+    'sen.titulo': 'Estado de los sensores', 'sen.ayuda': 'Un sensor cuenta como sin señal tras 2 horas sin datos. Señal: de 0 (nula) a 255 (excelente).', 'sen.estado': 'Estado', 'sen.senal': 'Señal', 'sen.bateria': 'Batería', 'sen.ultima': 'Último dato', 'sen.conectado': 'Conectado', 'sen.sin_senal': 'Sin señal', 'sen.desconocido': 'Sin información', 'sen.log': 'Registro de cortes', 'sen.log_ayuda': 'La duración se cuenta desde el último dato recibido, no desde que se detectó el corte.', 'sen.detectado': 'Detectado', 'sen.volvio': 'Volvió', 'sen.duracion': 'Duración', 'sen.sin_cortes': 'Sin cortes registrados', 'sen.sigue': 'sigue sin señal', 'sen.notificaciones': 'Notificaciones', 'sen.sin_notificaciones': 'Sin notificaciones',
     'aj.ayuda': 'Para saber qué sensor es cuál, apretá el botón del sensor: su "última lectura" pasa a "recién".',
     'aj.no_sensores': 'No hay sensores todavía.', 'aj.ultima': 'última lectura {h}', 'aj.sin_lecturas': 'sin lecturas',
     'aj.guardado': 'Guardado de datos', 'aj.guardar_cada': 'Guardar las temperaturas cada',
-    'aj.fila_por': 'Una fila por habitación (y afuera) en la base de datos', 'aj.exportar': 'El CSV se genera al descargarlo desde Temperaturas.', 'aj.afuera': 'Temperatura de afuera', 'aj.ubicacion': 'Ubicación',
+    'aj.fila_por': 'Una fila por habitación (y afuera) en la base de datos', 'aj.exportar': 'El CSV se genera al descargarlo desde Temperaturas.', 'aj.todo_titulo': 'Exportar todos los datos', 'aj.todo_ayuda': 'Descarga un ZIP con un CSV por tabla: temperaturas, ventanas, termostatos, medidores, lecturas, períodos y cierres. Sin filtros.', 'aj.todo_btn': 'Descargar todo (CSV)', 'aj.afuera': 'Temperatura de afuera', 'aj.ubicacion': 'Ubicación',
     'aj.buscar_ph': 'Buscar ciudad, ej.: Wiesbaden', 'aj.buscando': 'Buscando…', 'aj.sin_resultados': 'Sin resultados',
     'aj.sin_guardar': 'sin guardar', 'aj.guardar': 'Guardar cambios', 'aj.guardados': 'Cambios guardados',
     'pie.fuente': 'Zigbee2MQTT · datos del clima: Open-Meteo', 'pie.guardando': 'Guardando cada {n} min',
@@ -708,6 +840,7 @@ const I18N = {
     'err.fecha_invalida': 'Fecha inválida', 'err.falta_habitacion': 'Falta la habitación', 'err.falta_apertura': 'Falta la hora de apertura',
     'err.fin_antes': 'El cierre no puede ser anterior a la apertura', 'err.no_encontrado': 'Registro no encontrado',
     'err.ya_abierta': 'Esa habitación ya tiene una ventana abierta', 'err.datos_invalidos': 'Datos inválidos',
+    'err.segundos_vivo': 'El valor debe estar entre 3 y 300 segundos', 'aj.vivo': 'Actualizar el panel cada', 'aj.segundos': 'segundos', 'aj.vivo_ayuda': 'Cada cuánto consulta el navegador si hay datos nuevos. No cambia lo que se guarda en el registro.',
     'err.intervalo': 'El intervalo debe estar entre 1 y 1440 minutos', 'err.ubicacion': 'Ubicación inválida',
     'err.busqueda': 'No se pudo buscar la ubicación', 'err.sesion': 'Sesión vencida, volvé a entrar', 'err.http': 'Error {n}',
     'grafico.reset': 'Restablecer zoom',
@@ -733,8 +866,8 @@ const I18N = {
     'per.cierres_guardados': 'Valores finales guardados', 'per.creado': 'Período creado', 'per.actualizado': 'Período actualizado',
     'per.confirmar_borrar': '¿Borrar el período "{n}" y sus valores finales? Las lecturas no se borran.',
     'per.v_inicio': 'inicio de {n} (contador en 0)', 'per.v_cierre': 'cierre de {n}',
-    'per.comparacion': 'Comparación entre períodos', 'per.variacion': 'vs. anterior', 'per.incompleto': 'incompleto',
-    'per.comparacion_ayuda': 'Consumo de cada medidor en cada período. "Incompleto": el período ya terminó pero faltan datos hasta el cierre (cargá el valor final). El período en curso cuenta hasta la última lectura.',
+    'per.comparacion': 'Comparación entre períodos', 'per.proyeccion': 'proyección a fin de año', 'per.proy_frio': 'Proyección según el frío: {c} consumidos + {r} por grado-día × {g} grados-día = {p}. El ritmo sale de lo consumido este período; los grados-día son el frío de las mismas fechas restantes del año anterior (lo que faltó cada día para llegar a 15 °C). Es una estimación: asume que este invierno será tan frío como el anterior y que seguirás calefaccionando igual.', 'per.proy_calculo': 'Calefacción: se proyecta según el frío (ver el ⓘ de cada valor). Si no hay datos del clima, proyección a fin de año = consumido este año hasta la última lectura + consumo esperado hasta el 31 de diciembre. El consumo esperado sigue la forma de las estaciones (invierno gasta mucho más que verano), tomada de lo medido en esas fechas o en las equivalentes del otro lado del invierno (simétricas respecto del 15 de enero), y se ajusta a tu ritmo actual: si en los últimos ~7 días consumiste más (o menos) de lo habitual para esas fechas, lo que falta sube (o baja) en la misma proporción. Al volver a consumir menos, la proyección baja de nuevo. Solo se usan tramos con lecturas separadas por 62 días o menos. Si casi no hay datos comparables, se usa el consumo diario promedio.', 'per.proy_lineal': 'sin estacionalidad', 'per.proy_lineal_ayuda': 'No hay suficientes lecturas cercanas entre sí en la época comparable, así que se usa el consumo diario promedio. Es poco confiable si se acerca el invierno.', 'per.variacion': 'vs. anterior', 'per.incompleto': 'incompleto',
+    'per.comparacion_ayuda': 'Consumo de cada medidor en cada período. "Incompleto": el período ya terminó pero faltan datos hasta el cierre (cargá el valor final). El período en curso cuenta hasta la última lectura. La barra punteada es la proyección a fin de año, calculada según el frío del año anterior.',
     'per.ninguno': 'Todavía no hay períodos. Creá el primero con el formulario.', 'per.sin_medidores': 'Primero creá los medidores en Lecturas.',
     'med.falta_cierre': 'falta el valor final del período anterior',
     'med.falta_cierre_ayuda': 'No se conoce lo consumido entre la última lectura y el cierre del período anterior. Cargá su valor final en Calefacción → Períodos.',
@@ -749,16 +882,16 @@ const I18N = {
     'med.dias': 'Días', 'med.acumulado': 'Acumulado', 'med.reinicio_badge': 'reinicio', 'med.reinicio_auto': 'reinicio (automático)',
     'med.guardada': 'Lectura guardada', 'med.creado': 'Medidor creado', 'med.actualizado': 'Medidor actualizado',
     'med.confirmar_borrar': '¿Borrar el medidor "{n}" y todas sus lecturas?', 'med.primera': 'primera lectura',
-    'cons.periodo': 'en el período', 'cons.por_dia': '{v} por día', 'cons.total': 'Total desde el inicio: {v}', 'cons.total_todos': 'Total',
+    'cons.periodo_ant': 'Período anterior', 'cons.a_la_fecha': 'A la fecha', 'cons.proyeccion': 'Proyección', 'cons.proy_total_ayuda': 'Suma de la proyección de cada medidor. Cada una es lo consumido + el ritmo de este período por grado-día × el frío de las mismas fechas restantes del año anterior. Es una estimación: asume un invierno igual al anterior y seguir calefaccionando igual.', 'cons.frio_ayuda': 'Reparto según el frío: entre dos lecturas, cada día recibe consumo según su temperatura media exterior (Open-Meteo). Los días más fríos reciben más y los días de 15 °C o más casi nada. El total entre dos lecturas no cambia. Es una estimación: no sabe cómo se calefaccionó realmente.', 'cons.estimado': 'estimado', 'cons.estimado_ayuda': 'Ese período no tiene lecturas cerca de esta fecha: no se puede saber cuánto se había consumido hasta acá. Por eso solo se muestra el período completo, sin porcentaje.', 'cons.parcial': 'Datos incompletos: el período anterior tiene datos solo de una parte de esas fechas', 'cons.periodo': 'en el período', 'cons.por_dia': '{v} por día', 'cons.total': 'Total desde el inicio: {v}', 'cons.total_todos': 'Total',
     'cons.acumulado_titulo': 'Consumo acumulado en el período', 'cons.barras_dia': 'Consumo por día', 'cons.barras_mes': 'Consumo por mes',
     'cons.periodos': 'Períodos entre lecturas', 'cons.prom_dia': 'Prom./día',
-    'cons.ayuda': 'Entre dos lecturas, el consumo se reparte de forma pareja en esos días, así que un período puede incluir solo una parte. Se cuenta hasta la última lectura.',
+    'cons.ayuda': 'Entre dos lecturas, el consumo de calefacción se reparte según el frío de cada día, así que un período puede incluir solo una parte. Se cuenta hasta la última lectura.',
     'cons.sin_medidores': 'No hay medidores. Crealos en Calefacción → Lecturas.', 'err.lectura_invalida': 'Lectura inválida',
     'nav.termostatos': 'Termostatos', 'termo.titulo': 'Termostato', 'termo.cambiado': 'cambiado {h}', 'termo.sin': 'sin registrar',
     'termo.nivel': 'Nivel', 'termo.historial': 'Cambios de termostato', 'termo.dlg': 'Registrar nivel de termostato', 'termo.dlg_editar': 'Corregir cambio de termostato',
     'err.termo_duplicado': 'Ya hay otro cambio de termostato en esa habitación a esa misma hora',
     'termo.cuando': 'Desde (fecha y hora)', 'termo.ahora': 'ahora', 'termo.actual': 'Nivel actual', 'termo.guardado': 'Nivel registrado',
-    'termo.leyenda': '{n} · termostato', 'termo.apagado': 'Apagado', 'termo.helada': 'Antiheladas', 'termo.subir': 'Subir medio punto', 'termo.bajar': 'Bajar medio punto', 'grafico.termostatos': 'Termostatos',
+    'termo.leyenda': '{n} · termostato', 'termo.apagado': 'Apagado', 'termo.helada': 'Antiheladas', 'termo.subir': 'Subir medio punto', 'termo.bajar': 'Bajar medio punto', 'grafico.termostatos': 'Termostatos', 'grafico.nivel_termo': 'Nivel termostato', 'grafico.mostrar': 'Mostrar', 'grafico.ventanas': 'Ventanas', 'grafico.referencia': 'Nivel recomendado',
     'termo.ayuda': 'Cada nivel queda registrado hasta el próximo cambio. 0 = apagado · copo de nieve = antiheladas (en el CSV figura como 0.5).',
     'grafico.ayuda_termo': 'Línea escalonada fina = nivel del termostato (eje derecho).',
     'grafico.tocar': 'Tocá para hacer zoom', 'grafico.listo': 'Listo', 'grafico.pantalla': 'Pantalla completa', 'grafico.salir_pantalla': 'Salir de pantalla completa', 'grafico.girar': 'Girá el celular para verlo en horizontal',
@@ -769,16 +902,18 @@ const I18N = {
     'manual.nombre_ph': 'Nombre, ej.: Baño', 'crear': 'Crear', 'manual.ninguno': 'Todavía no creaste ninguno.',
     'manual.confirmar_borrar': '¿Borrar "{n}" con todos sus registros?', 'manual.creado': 'Sensor creado', 'manual.borrado': 'Sensor borrado',
     'manual.guardado': 'Registro agregado', 'manual.no_hay': 'Primero creá un sensor manual en Ajustes.',
-    'err.no_manual': 'Ese sensor no es manual', 'err.falta_nombre': 'Falta el nombre', 'err.temp_invalida': 'Temperatura inválida',
+    'manual.pasar_manual': 'pasar a manual', 'manual.vincular': 'Vincular con sensor Zigbee', 'manual.vinculado': 'Sensor vinculado: el historial pasó al Zigbee', 'manual.pasado': 'Sensor convertido a manual', 'manual.confirmar_vincular': '¿Vincular "{n}" con el sensor {d}? Los registros y el nombre pasan al sensor Zigbee.', 'manual.confirmar_pasar': '¿Pasar "{n}" a manual? Se conserva el historial.', 'err.destino_invalido': 'Sensor Zigbee inválido', 'err.no_automatico': 'Ese sensor no es automático', 'err.no_manual': 'Ese sensor no es manual', 'err.falta_nombre': 'Falta el nombre', 'err.temp_invalida': 'Temperatura inválida',
     'err.humedad_invalida': 'Humedad inválida (0–100)',
   },
   en: {
+    'viv.titulo': 'Home and bills', 'viv.ayuda': 'Meter units are not kWh. With the kWh from the annual bill, the dashboard works out what each unit is worth and the consumption per m². Leave blank whatever you do not have.', 'viv.es_dpto': 'It is an apartment (part of a building)', 'viv.m2_casa': 'House area (m²)', 'viv.m2_dpto': 'Apartment area (m²)', 'viv.m2_edificio': 'Building area (m²)', 'viv.habitaciones': 'Area per meter', 'viv.facturas': 'Annual bills', 'viv.kwh_vivienda': 'kWh home', 'viv.unidades_vivienda': 'Units on the bill', 'viv.kwh_edificio': 'kWh building', 'viv.unidades_edificio': 'Building units', 'viv.guardar': 'Save home', 'viv.precio_kwh': 'Price (€/kWh)', 'ene.precio': '€/kWh', 'viv.pagado': 'Paid (€)', 'ene.pagado': 'Paid (€)', 'ene.pagado_ayuda': 'Actual amount paid for that period, according to the bill. It includes what the calculated cost leaves out, such as fixed, metering or service costs.', 'ene.costo': 'Cost (€)', 'ene.proyeccion': 'Year-end estimate', 'ene.proy_kwh': 'Est. close (kWh)', 'ene.proy_costo': 'Est. close (€)', 'ene.proyeccion_ayuda': 'Expected at the close of the current period: units projected from the cold × average kWh/unit of previous bills × €/kWh. It is an estimate: it assumes a winter like the last one and heating the same way. The value per unit varied a lot between years, so the margin is wide.', 'ene.precio_ayuda': 'Energy price per kWh entered for that year. If a period has none, the latest known one is used, with ≈.', 'ene.costo_ayuda': 'kWh × price per kWh. It is the cost of the energy used: the real bill may add fixed, base or service costs, so it need not match the billed total.', 'err.vivienda': 'Values must be greater than 0', 'ene.titulo': 'Energy and costs', 'ene.anual': 'Annual comparison', 'ene.por_habitacion': 'By room', 'ene.grupo_consumo': 'Consumption', 'ene.grupo_costos': 'Costs', 'ene.participacion': 'Share', 'ene.kpi_intensidad': 'Intensity {p}', 'ene.kpi_costo': 'Energy cost {p}', 'ene.kpi_actual': '{p} to date', 'ene.kpi_fin': 'Closing estimate {p}', 'ene.pagado_val': 'Paid: {v} €', 'met.clima_titulo': 'Indoor climate', 'ene.vacio': 'The kWh from the bill are missing.', 'ene.ir_ajustes': 'Go to Settings', 'ene.unidades': 'Units', 'ene.factor': 'kWh/unit', 'ene.factor_ayuda': 'kWh on the bill ÷ units in the period. It tells how much energy each meter unit is worth.', 'ene.factor_medio_ayuda': 'kWh on the bill ÷ units in the period. A period without a bill uses the average of previous ones: all kWh ÷ all units, using building totals for an apartment.', 'ene.kwh': 'kWh', 'ene.kwh_m2': 'kWh/m²', 'ene.w_m2': 'W/m²', 'ene.w_m2_ayuda': 'Average power: kWh ÷ m² ÷ hours in the period. It is an average of the whole period, not the use of a specific hour. If the period began with the move-in, it counts from that day.', 'ene.costos_titulo': 'Costs', 'ene.edificio_titulo': 'Building', 'ene.kwh_edificio': 'kWh building', 'ene.kwh_m2_edificio': 'kWh/m² building', 'ene.kwh_m2_vivienda': 'kWh/m² home', 'ene.vs_edificio': 'vs. building', 'ene.vs_edificio_ayuda': 'Difference in kWh/m² between your home and the building average. Negative means you use less per m². It is not calculated if the period includes the move-in, since the months would differ.', 'ene.estimado_ayuda': 'This period has no bill yet: the average kWh/unit of previous bills is used (all kWh ÷ all units).', 'ene.fuente_edificio': 'Calculated from the building kWh and units, because the home figure is missing.', 'ene.edificio': 'from building',
+    'nav.metricas': 'Metrics', 'met.humedad': 'Relative humidity (RH)', 'met.temperatura': 'Temperature', 'met.nota': 'These are medians calculated only from readings that were actually measured. Hours with the sensor down do not count. With more days of data, these values will become firmer.', 'met.pierde': 'RH change from ventilation', 'met.recupera': 'RH recovery', 'met.enfria': 'ΔT from ventilation', 'met.noche': 'Night-time temperature drop', 'met.puntos': '%RH', 'met.puntos_h': '%RH/h', 'met.n_aperturas': 'median · {n} openings', 'met.n_noches': 'median · {n} nights', 'met.col_aperturas': 'Openings', 'met.col_pierde': 'ΔRH (%RH)', 'met.col_velocidad': 'Drop rate (%RH/min)', 'met.col_recupera': '1 h recovery (%RH)', 'met.col_enfria': 'ΔT (°C)', 'met.col_temp_recupera': '1 h recovery (°C)', 'met.col_noches': 'Nights', 'met.col_noche': 'Drop 23–06 h (°C)', 'met.col_afuera': 'Outdoor T', 'met.pierde_ayuda': 'ΔRH: change in relative humidity, in percentage points (%RH), from the reading before opening to the lowest value of the opening. It is the median of the measured openings.', 'met.velocidad_ayuda': 'Drop rate: %RH lost per minute, from opening to the lowest value.', 'met.recupera_ayuda': 'Recovery: %RH regained in the hour after the lowest value. It comes from moisture released by walls and furniture, and from activity at home. In brackets, how many openings allow measuring it: those interrupted by another opening are excluded.', 'met.enfria_ayuda': 'ΔT: change in indoor temperature, from the reading before opening to the lowest value of the opening. It is the median of the measured openings.', 'met.temp_recupera_ayuda': 'Recovery: degrees gained in the hour after the lowest value. If negative, the room kept cooling.', 'met.noche_ayuda': 'Night-time temperature drop: temperature change between 23:00 and 06:00, on nights without open windows. It includes whatever heating was running, so it does not measure insulation on its own.',
     'app.titulo': 'Home climate',
     'nav.monitoreo': 'Monitoring', 'nav.panel': 'Dashboard', 'nav.temperaturas': 'Temperatures', 'nav.ventanas': 'Windows',
     'nav.sistema': 'System', 'nav.ajustes': 'Settings', 'nav.salir': 'Log out',
     'menu': 'Menu', 'cerrar': 'Close', 'idioma': 'Language',
     'tema.titulo': 'Theme', 'tema.claro': 'Light', 'tema.oscuro': 'Dark', 'tema.auto': 'Automatic',
-    'panel.registrar_pasada': 'Log a past opening', 'panel.ultimas24': 'Last 24 hours',
+    'panel.registrar_pasada': 'Log a past opening', 'panel.ultimas24': 'Today (00:00 – 24:00)', 'panel.consumo24': 'Accumulated consumption today (00:00 – 24:00)', 'panel.consumo24_ayer': '{n} (previous day)', 'panel.consumo24_vacio': 'There are not enough meter readings today yet.', 'panel.consumo24_ayuda': 'Starts at 0 at 00:00 and is drawn as the day goes on. Dots are manually entered readings; the line between them is an estimate. The dashed line is the whole previous day, at the same time.',
     'panel.franjas': 'Vertical lines = window opened and closed; the shaded area is the time it was open.',
     'filtros': 'Filters', 'desde': 'From', 'hasta': 'To', 'filtrar': 'Apply', 'buscar': 'Search',
     'habitacion': 'Room', 'todas': 'All', 'minutos': 'minutes',
@@ -792,8 +927,8 @@ const I18N = {
     'sin_datos_periodo': 'No data for this period', 'sin_datos': 'No data',
     'prom': 'avg.', 'min': 'min', 'max': 'max',
     'temp.registros': 'Records ({n})', 'fecha_hora': 'Date & time', 'temp_corta': 'Temp.', 'humedad': 'Humidity', 'bateria': 'Battery',
-    'sin_registros': 'No records for this filter', 'mostrar_mas': 'Show more ({n} remaining)',
-    'vent.titulo': 'Window openings', 'vent.manual': 'Manual entry',
+    'sin_registros': 'No records for this filter', 'pag.rango': '{a}–{b} of {n}', 'pag.pagina': 'Page {p} of {n}', 'pag.primera': 'First page', 'pag.anterior': 'Previous page', 'pag.siguiente': 'Next page', 'pag.ultima': 'Last page',
+    'vent.titulo': 'Window openings', 'vent.efecto': 'Effect on temperature', 'vent.efecto_ayuda': 'Temperature before opening → lowest up to 30 min after closing (and after how many minutes)', 'vent.sin_datos': 'no data', 'vent.precision': 'The values are not very precise: they depend on the moment each reading was taken (the panel saves one every few minutes).', 'vent.aprox_ayuda': 'Estimate: there was no reading right before opening, so the nearest one was used', 'vent.caida_media': 'Average drop', 'vent.caida_hum_media': 'Average ΔRH', 'vent.caida_hum_sub': '{n} openings', 'vent.caida_media_sub': 'per opening', 'vent.manual': 'Manual entry',
     'total': 'Total', 'n_aperturas': '{n} openings', 'abiertas_total': '{d} open in total',
     'conf.titulo': 'Confirm', 'conf.si': 'Yes, save', 'conf.nuevo': 'Save this new entry?', 'conf.cambios': 'Save the changes?',
     'conf.termo': 'Set the thermostat in {h} to {n}?', 'conf.abrir': 'Record that the window in {h} was opened?', 'conf.cerrar': 'Record that the window in {h} was closed?',
@@ -803,10 +938,11 @@ const I18N = {
     'dlg.nuevo': 'New window entry', 'dlg.editar': 'Edit window entry',
     'dlg.vacio': 'Leave empty if still open', 'dlg.nota': 'Note (optional)',
     'aj.habitaciones': 'Rooms',
+    'sen.titulo': 'Sensor status', 'sen.ayuda': 'A sensor counts as having no signal after 2 hours without data. Signal: from 0 (none) to 255 (excellent).', 'sen.estado': 'Status', 'sen.senal': 'Signal', 'sen.bateria': 'Battery', 'sen.ultima': 'Last data', 'sen.conectado': 'Connected', 'sen.sin_senal': 'No signal', 'sen.desconocido': 'Unknown', 'sen.log': 'Outage log', 'sen.log_ayuda': 'Duration is counted from the last data received, not from when the outage was detected.', 'sen.detectado': 'Detected', 'sen.volvio': 'Back', 'sen.duracion': 'Duration', 'sen.sin_cortes': 'No outages recorded', 'sen.sigue': 'still no signal', 'sen.notificaciones': 'Notifications', 'sen.sin_notificaciones': 'No notifications',
     'aj.ayuda': 'To find out which sensor is which, press the sensor\'s button: its "last reading" changes to "just now".',
     'aj.no_sensores': 'No sensors yet.', 'aj.ultima': 'last reading {h}', 'aj.sin_lecturas': 'no readings',
     'aj.guardado': 'Data logging', 'aj.guardar_cada': 'Save temperatures every',
-    'aj.fila_por': 'One row per room (and outdoors) in the database', 'aj.exportar': 'The CSV is generated when you download it from Temperatures.', 'aj.afuera': 'Outdoor temperature', 'aj.ubicacion': 'Location',
+    'aj.fila_por': 'One row per room (and outdoors) in the database', 'aj.exportar': 'The CSV is generated when you download it from Temperatures.', 'aj.todo_titulo': 'Export all data', 'aj.todo_ayuda': 'Downloads a ZIP with one CSV per table: temperatures, windows, thermostats, meters, readings, periods and closings. No filters.', 'aj.todo_btn': 'Download everything (CSV)', 'aj.afuera': 'Outdoor temperature', 'aj.ubicacion': 'Location',
     'aj.buscar_ph': 'Search city, e.g. Wiesbaden', 'aj.buscando': 'Searching…', 'aj.sin_resultados': 'No results',
     'aj.sin_guardar': 'unsaved', 'aj.guardar': 'Save changes', 'aj.guardados': 'Changes saved',
     'pie.fuente': 'Zigbee2MQTT · weather data: Open-Meteo', 'pie.guardando': 'Saving every {n} min',
@@ -817,6 +953,7 @@ const I18N = {
     'err.fecha_invalida': 'Invalid date', 'err.falta_habitacion': 'Room is missing', 'err.falta_apertura': 'Opening time is missing',
     'err.fin_antes': 'Closing time cannot be before opening time', 'err.no_encontrado': 'Entry not found',
     'err.ya_abierta': 'That room already has an open window', 'err.datos_invalidos': 'Invalid data',
+    'err.segundos_vivo': 'The value must be between 3 and 300 seconds', 'aj.vivo': 'Update the dashboard every', 'aj.segundos': 'seconds', 'aj.vivo_ayuda': 'How often the browser checks for new data. It does not change what is logged.',
     'err.intervalo': 'The interval must be between 1 and 1440 minutes', 'err.ubicacion': 'Invalid location',
     'err.busqueda': 'Could not search for the location', 'err.sesion': 'Session expired, please sign in again', 'err.http': 'Error {n}',
     'grafico.reset': 'Reset zoom',
@@ -842,8 +979,8 @@ const I18N = {
     'per.cierres_guardados': 'Final values saved', 'per.creado': 'Period created', 'per.actualizado': 'Period updated',
     'per.confirmar_borrar': 'Delete period "{n}" and its final values? Readings are kept.',
     'per.v_inicio': 'start of {n} (counter at 0)', 'per.v_cierre': 'close of {n}',
-    'per.comparacion': 'Comparison between periods', 'per.variacion': 'vs. previous', 'per.incompleto': 'incomplete',
-    'per.comparacion_ayuda': 'Consumption of each meter in each period. "Incomplete": the period has ended but data up to the close is missing (enter the final value). The ongoing period counts up to the last reading.',
+    'per.comparacion': 'Comparison between periods', 'per.proyeccion': 'year-end projection', 'per.proy_frio': 'Cold-based projection: {c} consumed + {r} per degree day × {g} degree days = {p}. The rate comes from this period\'s consumption; the degree days are the cold of the same remaining dates last year (how far each day was below 15 °C). It is an estimate: it assumes this winter will be as cold as the last and that you keep heating the same way.', 'per.proy_calculo': 'Heating: projected from the cold (see the ⓘ next to each value). Without weather data, projection to year end = consumed this year up to the last reading + expected consumption until 31 December. The expected consumption follows the shape of the seasons (winter uses far more than summer), taken from what was measured on those dates or the equivalent ones on the other side of winter (mirrored around 15 January), and is adjusted to your current pace: if over the last ~7 days you used more (or less) than usual for those dates, the remainder goes up (or down) in the same proportion. When you use less again, the projection drops back. Only stretches with readings 62 days apart or less are used. If there is hardly any comparable data, the average daily consumption is used.', 'per.proy_lineal': 'no seasonality', 'per.proy_lineal_ayuda': 'There are not enough closely spaced readings in the comparable season, so the average daily consumption is used. It is unreliable when winter is approaching.', 'per.variacion': 'vs. previous', 'per.incompleto': 'incomplete',
+    'per.comparacion_ayuda': 'Consumption of each meter in each period. "Incomplete": the period has ended but data up to the close is missing (enter the final value). The ongoing period counts up to the last reading. The dashed bar is the projection to year end, calculated from last year\'s cold.',
     'per.ninguno': 'There are no periods yet. Create the first one with the form.', 'per.sin_medidores': 'First create the meters under Meter readings.',
     'med.falta_cierre': 'previous period final value missing',
     'med.falta_cierre_ayuda': 'The consumption between the last reading and the close of the previous period is unknown. Enter its final value under Heating → Periods.',
@@ -858,16 +995,16 @@ const I18N = {
     'med.dias': 'Days', 'med.acumulado': 'Accumulated', 'med.reinicio_badge': 'reset', 'med.reinicio_auto': 'reset (automatic)',
     'med.guardada': 'Reading saved', 'med.creado': 'Meter created', 'med.actualizado': 'Meter updated',
     'med.confirmar_borrar': 'Delete meter "{n}" and all its readings?', 'med.primera': 'first reading',
-    'cons.periodo': 'in this period', 'cons.por_dia': '{v} per day', 'cons.total': 'Total since start: {v}', 'cons.total_todos': 'Total',
+    'cons.periodo_ant': 'Previous period', 'cons.a_la_fecha': 'To date', 'cons.proyeccion': 'Projection', 'cons.proy_total_ayuda': 'Sum of each meter\'s projection. Each one is consumption so far + this period\'s rate per degree day × the cold of the same remaining dates last year. It is an estimate: it assumes a winter like the last one and heating the same way.', 'cons.frio_ayuda': 'Cold-based split: between two readings, each day gets consumption according to its average outdoor temperature (Open-Meteo). Colder days get more, and days at 15 °C or above get almost nothing. The total between two readings does not change. It is an estimate: it does not know how you actually heated.', 'cons.estimado': 'estimated', 'cons.estimado_ayuda': 'That period has no readings near this date, so the consumption up to here is unknown. The full period is shown, without a percentage.', 'cons.parcial': 'Incomplete data: the previous period only has data for part of these dates', 'cons.periodo': 'in this period', 'cons.por_dia': '{v} per day', 'cons.total': 'Total since start: {v}', 'cons.total_todos': 'Total',
     'cons.acumulado_titulo': 'Accumulated consumption in the period', 'cons.barras_dia': 'Consumption per day', 'cons.barras_mes': 'Consumption per month',
     'cons.periodos': 'Periods between readings', 'cons.prom_dia': 'Avg./day',
-    'cons.ayuda': 'Between two readings, consumption is spread evenly over those days, so a period may include only part of it. Counted up to the last reading.',
+    'cons.ayuda': 'Between two readings, heating consumption is split according to how cold each day was, so a period may include only part of it. Counted up to the last reading.',
     'cons.sin_medidores': 'There are no meters. Create them under Heating → Meter readings.', 'err.lectura_invalida': 'Invalid reading',
     'nav.termostatos': 'Thermostats', 'termo.titulo': 'Thermostat', 'termo.cambiado': 'changed {h}', 'termo.sin': 'not set',
     'termo.nivel': 'Level', 'termo.historial': 'Thermostat changes', 'termo.dlg': 'Log thermostat level', 'termo.dlg_editar': 'Correct thermostat change',
     'err.termo_duplicado': 'There is already another thermostat change for that room at that exact time',
     'termo.cuando': 'Since (date & time)', 'termo.ahora': 'now', 'termo.actual': 'Current level', 'termo.guardado': 'Level saved',
-    'termo.leyenda': '{n} · thermostat', 'termo.apagado': 'Off', 'termo.helada': 'Frost protection', 'termo.subir': 'Up half a step', 'termo.bajar': 'Down half a step', 'grafico.termostatos': 'Thermostats',
+    'termo.leyenda': '{n} · thermostat', 'termo.apagado': 'Off', 'termo.helada': 'Frost protection', 'termo.subir': 'Up half a step', 'termo.bajar': 'Down half a step', 'grafico.termostatos': 'Thermostats', 'grafico.nivel_termo': 'Thermostat level', 'grafico.mostrar': 'Show', 'grafico.ventanas': 'Windows', 'grafico.referencia': 'Recommended level',
     'termo.ayuda': 'Each level is kept until the next change. 0 = off · snowflake = frost protection (0.5 in the CSV).',
     'grafico.ayuda_termo': 'Thin stepped line = thermostat level (right axis).',
     'grafico.tocar': 'Tap to zoom and pan', 'grafico.listo': 'Done', 'grafico.pantalla': 'Full screen', 'grafico.salir_pantalla': 'Exit full screen', 'grafico.girar': 'Turn your phone to see it in landscape',
@@ -878,16 +1015,18 @@ const I18N = {
     'manual.nombre_ph': 'Name, e.g. Bathroom', 'crear': 'Create', 'manual.ninguno': 'You have not created any yet.',
     'manual.confirmar_borrar': 'Delete "{n}" and all its readings?', 'manual.creado': 'Sensor created', 'manual.borrado': 'Sensor deleted',
     'manual.guardado': 'Reading added', 'manual.no_hay': 'First create a manual sensor in Settings.',
-    'err.no_manual': 'That sensor is not a manual one', 'err.falta_nombre': 'Name is missing', 'err.temp_invalida': 'Invalid temperature',
+    'manual.pasar_manual': 'switch to manual', 'manual.vincular': 'Link to Zigbee sensor', 'manual.vinculado': 'Sensor linked: history moved to the Zigbee sensor', 'manual.pasado': 'Sensor switched to manual', 'manual.confirmar_vincular': 'Link "{n}" to sensor {d}? Readings and name move to the Zigbee sensor.', 'manual.confirmar_pasar': 'Switch "{n}" to manual? History is kept.', 'err.destino_invalido': 'Invalid Zigbee sensor', 'err.no_automatico': 'That sensor is not automatic', 'err.no_manual': 'That sensor is not a manual one', 'err.falta_nombre': 'Name is missing', 'err.temp_invalida': 'Invalid temperature',
     'err.humedad_invalida': 'Invalid humidity (0–100)',
   },
   de: {
+    'viv.titulo': 'Wohnung und Abrechnungen', 'viv.ayuda': 'Zählereinheiten sind keine kWh. Mit den kWh aus der Jahresabrechnung berechnet das Panel den Wert jeder Einheit und den Verbrauch pro m². Lass leer, was du nicht hast.', 'viv.es_dpto': 'Es ist eine Wohnung (Teil eines Gebäudes)', 'viv.m2_casa': 'Hausfläche (m²)', 'viv.m2_dpto': 'Wohnungsfläche (m²)', 'viv.m2_edificio': 'Gebäudefläche (m²)', 'viv.habitaciones': 'Fläche pro Zähler', 'viv.facturas': 'Jahresabrechnungen', 'viv.kwh_vivienda': 'kWh Wohnung', 'viv.unidades_vivienda': 'Einheiten laut Abrechnung', 'viv.kwh_edificio': 'kWh Gebäude', 'viv.unidades_edificio': 'Einheiten des Gebäudes', 'viv.guardar': 'Wohnung speichern', 'viv.precio_kwh': 'Preis (€/kWh)', 'ene.precio': '€/kWh', 'viv.pagado': 'Bezahlt (€)', 'ene.pagado': 'Bezahlt (€)', 'ene.pagado_ayuda': 'Tatsächlich bezahlter Betrag für diesen Zeitraum laut Abrechnung. Enthält, was die berechneten Kosten nicht abdecken, etwa Grund-, Mess- oder Servicekosten.', 'ene.costo': 'Kosten (€)', 'ene.proyeccion': 'Schätzung zum Jahresende', 'ene.proy_kwh': 'Prognose (kWh)', 'ene.proy_costo': 'Prognose (€)', 'ene.proyeccion_ayuda': 'Erwartet zum Ende des laufenden Zeitraums: nach Kälte prognostizierte Einheiten × mittlere kWh/Einheit der bisherigen Abrechnungen × €/kWh. Das ist eine Schätzung: Sie nimmt einen Winter wie den letzten und gleiches Heizen an. Der Wert pro Einheit schwankte zwischen den Jahren stark, die Spanne ist also groß.', 'ene.precio_ayuda': 'Für dieses Jahr eingetragener Energiepreis pro kWh. Fehlt er, wird der letzte bekannte verwendet, mit ≈.', 'ene.costo_ayuda': 'kWh × Preis pro kWh. Das sind die Kosten der verbrauchten Energie: Die echte Abrechnung kann Grund- oder Nebenkosten enthalten und muss daher nicht mit dem Rechnungsbetrag übereinstimmen.', 'err.vivienda': 'Die Werte müssen größer als 0 sein', 'ene.titulo': 'Energie und Kosten', 'ene.anual': 'Jahresvergleich', 'ene.por_habitacion': 'Nach Raum', 'ene.grupo_consumo': 'Verbrauch', 'ene.grupo_costos': 'Kosten', 'ene.participacion': 'Anteil', 'ene.kpi_intensidad': 'Intensität {p}', 'ene.kpi_costo': 'Energiekosten {p}', 'ene.kpi_actual': '{p} bis heute', 'ene.kpi_fin': 'Schätzung zum Ende {p}', 'ene.pagado_val': 'Bezahlt: {v} €', 'met.clima_titulo': 'Raumklima', 'ene.vacio': 'Die kWh aus der Abrechnung fehlen.', 'ene.ir_ajustes': 'Zu den Einstellungen', 'ene.unidades': 'Einheiten', 'ene.factor': 'kWh/Einheit', 'ene.factor_ayuda': 'kWh der Abrechnung ÷ Einheiten des Zeitraums. Zeigt, wie viel Energie eine Zählereinheit wert ist.', 'ene.factor_medio_ayuda': 'kWh der Abrechnung ÷ Einheiten des Zeitraums. Ein Zeitraum ohne Abrechnung nutzt das Mittel der bisherigen: alle kWh ÷ alle Einheiten, bei einer Wohnung mit den Gebäudesummen.', 'ene.kwh': 'kWh', 'ene.kwh_m2': 'kWh/m²', 'ene.w_m2': 'W/m²', 'ene.w_m2_ayuda': 'Mittlere Leistung: kWh ÷ m² ÷ Stunden des Zeitraums. Das ist ein Mittelwert über den ganzen Zeitraum, nicht der Verbrauch einer bestimmten Stunde. Begann der Zeitraum mit dem Einzug, zählt er ab diesem Tag.', 'ene.costos_titulo': 'Kosten', 'ene.edificio_titulo': 'Gebäude', 'ene.kwh_edificio': 'kWh Gebäude', 'ene.kwh_m2_edificio': 'kWh/m² Gebäude', 'ene.kwh_m2_vivienda': 'kWh/m² Wohnung', 'ene.vs_edificio': 'vs. Gebäude', 'ene.vs_edificio_ayuda': 'Unterschied der kWh/m² deiner Wohnung zum Gebäudemittel. Negativ heißt: weniger Verbrauch pro m². Enthält der Zeitraum den Einzug, wird er nicht berechnet, weil die Monate abweichen würden.', 'ene.estimado_ayuda': 'Dieser Zeitraum hat noch keine Abrechnung: Es wird der mittlere kWh/Einheit-Wert der bisherigen verwendet (alle kWh ÷ alle Einheiten).', 'ene.fuente_edificio': 'Aus kWh und Einheiten des Gebäudes berechnet, weil der Wert der Wohnung fehlt.', 'ene.edificio': 'laut Gebäude',
+    'nav.metricas': 'Kennzahlen', 'met.humedad': 'Relative Feuchte (rF)', 'met.temperatura': 'Temperatur', 'met.nota': 'Das sind Mediane, die nur aus tatsächlich gemessenen Werten berechnet werden. Stunden mit ausgefallenem Sensor zählen nicht. Mit mehr Tagen an Daten werden diese Werte belastbarer.', 'met.pierde': 'Δ rF durch Lüften', 'met.recupera': 'Feuchte-Erholung', 'met.enfria': 'ΔT durch Lüften', 'met.noche': 'Nächtlicher Temperaturabfall', 'met.puntos': '% rF', 'met.puntos_h': '% rF/Std.', 'met.n_aperturas': 'Median · {n} Öffnungen', 'met.n_noches': 'Median · {n} Nächte', 'met.col_aperturas': 'Öffnungen', 'met.col_pierde': 'Δ rF (% rF)', 'met.col_velocidad': 'Abfallrate (% rF/Min.)', 'met.col_recupera': 'Erholung 1 Std. (% rF)', 'met.col_enfria': 'ΔT (°C)', 'met.col_temp_recupera': 'Erholung 1 Std. (°C)', 'met.col_noches': 'Nächte', 'met.col_noche': 'Abfall 23–06 Uhr (°C)', 'met.col_afuera': 'Außen-T', 'met.pierde_ayuda': 'Δ rF: Änderung der relativen Feuchte in Prozentpunkten (% rF), vom Wert vor dem Öffnen bis zum Tiefstwert der Öffnung. Es ist der Median der gemessenen Öffnungen.', 'met.velocidad_ayuda': 'Abfallrate: pro Minute verlorene % rF, vom Öffnen bis zum Tiefstwert.', 'met.recupera_ayuda': 'Erholung: In der Stunde nach dem Tiefstwert zurückgewonnene % rF. Sie stammt aus Feuchte, die Wände und Möbel abgeben, und aus der Nutzung der Wohnung. In Klammern: wie viele Öffnungen das messbar machen. Durch eine weitere Öffnung unterbrochene sind ausgeschlossen.', 'met.enfria_ayuda': 'ΔT: Änderung der Innentemperatur, vom Wert vor dem Öffnen bis zum Tiefstwert der Öffnung. Es ist der Median der gemessenen Öffnungen.', 'met.temp_recupera_ayuda': 'Erholung: In der Stunde nach dem Tiefstwert gewonnene Grad. Ist sie negativ, kühlte der Raum weiter ab.', 'met.noche_ayuda': 'Nächtlicher Temperaturabfall: Temperaturänderung zwischen 23:00 und 06:00 Uhr, in Nächten ohne offene Fenster. Enthält die laufende Heizung und misst daher nicht allein die Dämmung.',
     'app.titulo': 'Raumklima',
     'nav.monitoreo': 'Überwachung', 'nav.panel': 'Übersicht', 'nav.temperaturas': 'Temperaturen', 'nav.ventanas': 'Fenster',
     'nav.sistema': 'System', 'nav.ajustes': 'Einstellungen', 'nav.salir': 'Abmelden',
     'menu': 'Menü', 'cerrar': 'Schließen', 'idioma': 'Sprache',
     'tema.titulo': 'Design', 'tema.claro': 'Hell', 'tema.oscuro': 'Dunkel', 'tema.auto': 'Automatisch',
-    'panel.registrar_pasada': 'Vergangene Öffnung erfassen', 'panel.ultimas24': 'Letzte 24 Stunden',
+    'panel.registrar_pasada': 'Vergangene Öffnung erfassen', 'panel.ultimas24': 'Heute (00:00 – 24:00)', 'panel.consumo24': 'Kumulierter Verbrauch heute (00:00 – 24:00)', 'panel.consumo24_ayer': '{n} (Vortag)', 'panel.consumo24_vacio': 'Heute gibt es noch nicht genug Zählerstände.', 'panel.consumo24_ayuda': 'Beginnt um 00:00 bei 0 und wird im Laufe des Tages weitergezeichnet. Die Punkte sind von Hand erfasste Zählerstände; die Linie dazwischen ist eine Schätzung. Die gestrichelte Linie ist der ganze Vortag zur gleichen Uhrzeit.',
     'panel.franjas': 'Senkrechte Linien = Fenster geöffnet und geschlossen; die schattierte Fläche ist die Zeit, in der es offen war.',
     'filtros': 'Filter', 'desde': 'Von', 'hasta': 'Bis', 'filtrar': 'Filtern', 'buscar': 'Suchen',
     'habitacion': 'Raum', 'todas': 'Alle', 'minutos': 'Minuten',
@@ -901,8 +1040,8 @@ const I18N = {
     'sin_datos_periodo': 'Keine Daten in diesem Zeitraum', 'sin_datos': 'Keine Daten',
     'prom': 'Ø', 'min': 'min', 'max': 'max',
     'temp.registros': 'Einträge ({n})', 'fecha_hora': 'Datum & Uhrzeit', 'temp_corta': 'Temp.', 'humedad': 'Feuchte', 'bateria': 'Batterie',
-    'sin_registros': 'Keine Einträge für diesen Filter', 'mostrar_mas': 'Mehr anzeigen ({n} übrig)',
-    'vent.titulo': 'Fensteröffnungen', 'vent.manual': 'Manueller Eintrag',
+    'sin_registros': 'Keine Einträge für diesen Filter', 'pag.rango': '{a}–{b} von {n}', 'pag.pagina': 'Seite {p} von {n}', 'pag.primera': 'Erste Seite', 'pag.anterior': 'Vorherige Seite', 'pag.siguiente': 'Nächste Seite', 'pag.ultima': 'Letzte Seite',
+    'vent.titulo': 'Fensteröffnungen', 'vent.efecto': 'Wirkung auf die Temperatur', 'vent.efecto_ayuda': 'Temperatur vor dem Öffnen → tiefster Wert bis 30 Min. nach dem Schließen (und nach wie vielen Minuten)', 'vent.sin_datos': 'keine Daten', 'vent.precision': 'Die Werte sind nicht sehr genau: Sie hängen vom Zeitpunkt ab, an dem jede Messung erfasst wurde (das Panel speichert alle paar Minuten eine).', 'vent.aprox_ayuda': 'Schätzung: Direkt vor dem Öffnen gab es keine Messung, daher wurde die nächstliegende verwendet', 'vent.caida_media': 'Mittlerer Abfall', 'vent.caida_hum_media': 'Mittlere Δ rF', 'vent.caida_hum_sub': '{n} Öffnungen', 'vent.caida_media_sub': 'pro Öffnung', 'vent.manual': 'Manueller Eintrag',
     'total': 'Gesamt', 'n_aperturas': '{n} Öffnungen', 'abiertas_total': 'insgesamt {d} offen',
     'conf.titulo': 'Bestätigen', 'conf.si': 'Ja, speichern', 'conf.nuevo': 'Diesen neuen Eintrag speichern?', 'conf.cambios': 'Änderungen speichern?',
     'conf.termo': 'Thermostat in {h} auf {n} stellen?', 'conf.abrir': 'Erfassen, dass das Fenster in {h} geöffnet wurde?', 'conf.cerrar': 'Erfassen, dass das Fenster in {h} geschlossen wurde?',
@@ -912,10 +1051,11 @@ const I18N = {
     'dlg.nuevo': 'Neue Fensteröffnung', 'dlg.editar': 'Fensteröffnung bearbeiten',
     'dlg.vacio': 'Leer lassen, wenn noch offen', 'dlg.nota': 'Notiz (optional)',
     'aj.habitaciones': 'Räume',
+    'sen.titulo': 'Sensorstatus', 'sen.ayuda': 'Ein Sensor gilt nach 2 Stunden ohne Daten als ohne Signal. Signal: von 0 (keins) bis 255 (ausgezeichnet).', 'sen.estado': 'Status', 'sen.senal': 'Signal', 'sen.bateria': 'Batterie', 'sen.ultima': 'Letzte Daten', 'sen.conectado': 'Verbunden', 'sen.sin_senal': 'Kein Signal', 'sen.desconocido': 'Unbekannt', 'sen.log': 'Ausfallprotokoll', 'sen.log_ayuda': 'Die Dauer zählt ab den letzten empfangenen Daten, nicht ab der Erkennung des Ausfalls.', 'sen.detectado': 'Erkannt', 'sen.volvio': 'Zurück', 'sen.duracion': 'Dauer', 'sen.sin_cortes': 'Keine Ausfälle erfasst', 'sen.sigue': 'weiterhin kein Signal', 'sen.notificaciones': 'Benachrichtigungen', 'sen.sin_notificaciones': 'Keine Benachrichtigungen',
     'aj.ayuda': 'Um herauszufinden, welcher Sensor welcher ist, drücke die Taste am Sensor: „Letzte Messung" wechselt zu „gerade eben".',
     'aj.no_sensores': 'Noch keine Sensoren.', 'aj.ultima': 'letzte Messung {h}', 'aj.sin_lecturas': 'keine Messwerte',
     'aj.guardado': 'Datenspeicherung', 'aj.guardar_cada': 'Temperaturen speichern alle',
-    'aj.fila_por': 'Eine Zeile pro Raum (und außen) in der Datenbank', 'aj.exportar': 'Die CSV-Datei wird beim Herunterladen unter „Temperaturen“ erzeugt.', 'aj.afuera': 'Außentemperatur', 'aj.ubicacion': 'Standort',
+    'aj.fila_por': 'Eine Zeile pro Raum (und außen) in der Datenbank', 'aj.exportar': 'Die CSV-Datei wird beim Herunterladen unter „Temperaturen“ erzeugt.', 'aj.todo_titulo': 'Alle Daten exportieren', 'aj.todo_ayuda': 'Lädt eine ZIP-Datei mit je einer CSV pro Tabelle herunter: Temperaturen, Fenster, Thermostate, Zähler, Zählerstände, Zeiträume und Abschlüsse. Ohne Filter.', 'aj.todo_btn': 'Alles herunterladen (CSV)', 'aj.afuera': 'Außentemperatur', 'aj.ubicacion': 'Standort',
     'aj.buscar_ph': 'Stadt suchen, z. B. Wiesbaden', 'aj.buscando': 'Suche…', 'aj.sin_resultados': 'Keine Ergebnisse',
     'aj.sin_guardar': 'nicht gespeichert', 'aj.guardar': 'Änderungen speichern', 'aj.guardados': 'Änderungen gespeichert',
     'pie.fuente': 'Zigbee2MQTT · Wetterdaten: Open-Meteo', 'pie.guardando': 'Speichert alle {n} Min.',
@@ -926,6 +1066,7 @@ const I18N = {
     'err.fecha_invalida': 'Ungültiges Datum', 'err.falta_habitacion': 'Raum fehlt', 'err.falta_apertura': 'Öffnungszeit fehlt',
     'err.fin_antes': 'Das Schließen darf nicht vor dem Öffnen liegen', 'err.no_encontrado': 'Eintrag nicht gefunden',
     'err.ya_abierta': 'In diesem Raum ist bereits ein Fenster offen', 'err.datos_invalidos': 'Ungültige Daten',
+    'err.segundos_vivo': 'Der Wert muss zwischen 3 und 300 Sekunden liegen', 'aj.vivo': 'Übersicht aktualisieren alle', 'aj.segundos': 'Sekunden', 'aj.vivo_ayuda': 'Wie oft der Browser nach neuen Daten fragt. Ändert nicht, was gespeichert wird.',
     'err.intervalo': 'Das Intervall muss zwischen 1 und 1440 Minuten liegen', 'err.ubicacion': 'Ungültiger Standort',
     'err.busqueda': 'Standortsuche fehlgeschlagen', 'err.sesion': 'Sitzung abgelaufen, bitte erneut anmelden', 'err.http': 'Fehler {n}',
     'grafico.reset': 'Zoom zurücksetzen',
@@ -951,8 +1092,8 @@ const I18N = {
     'per.cierres_guardados': 'Endwerte gespeichert', 'per.creado': 'Zeitraum angelegt', 'per.actualizado': 'Zeitraum aktualisiert',
     'per.confirmar_borrar': 'Zeitraum „{n}“ und seine Endwerte löschen? Die Ablesungen bleiben erhalten.',
     'per.v_inicio': 'Beginn {n} (Zähler auf 0)', 'per.v_cierre': 'Ende {n}',
-    'per.comparacion': 'Vergleich der Zeiträume', 'per.variacion': 'ggü. Vorzeitraum', 'per.incompleto': 'unvollständig',
-    'per.comparacion_ayuda': 'Verbrauch jedes Zählers pro Zeitraum. „Unvollständig“: der Zeitraum ist vorbei, aber Daten bis zum Ende fehlen (Endwert eintragen). Der laufende Zeitraum zählt bis zur letzten Ablesung.',
+    'per.comparacion': 'Vergleich der Zeiträume', 'per.proyeccion': 'Prognose bis Jahresende', 'per.proy_frio': 'Prognose nach Kälte: {c} verbraucht + {r} pro Gradtag × {g} Gradtage = {p}. Das Tempo stammt aus dem Verbrauch dieses Zeitraums; die Gradtage sind die Kälte derselben verbleibenden Daten im Vorjahr (wie weit jeder Tag unter 15 °C lag). Das ist eine Schätzung: Sie nimmt an, dass dieser Winter so kalt wird wie der letzte und du weiter gleich heizt.', 'per.proy_calculo': 'Heizung: Die Prognose richtet sich nach der Kälte (siehe ⓘ bei jedem Wert). Ohne Wetterdaten gilt: Prognose bis Jahresende = in diesem Jahr bis zur letzten Ablesung verbraucht + erwarteter Verbrauch bis zum 31. Dezember. Der erwartete Verbrauch folgt dem Verlauf der Jahreszeiten (Winter verbraucht viel mehr als Sommer), abgeleitet aus den Messwerten dieser Daten oder der gespiegelten Daten auf der anderen Seite des Winters (Spiegelung am 15. Januar), und wird an dein aktuelles Tempo angepasst: Hast du in den letzten ~7 Tagen mehr (oder weniger) als üblich für diese Daten verbraucht, steigt (oder sinkt) der Rest im gleichen Verhältnis. Verbrauchst du wieder weniger, sinkt die Prognose wieder. Es werden nur Abschnitte mit Ablesungen im Abstand von höchstens 62 Tagen verwendet. Gibt es kaum vergleichbare Daten, wird der durchschnittliche Tagesverbrauch verwendet.', 'per.proy_lineal': 'ohne Saisonalität', 'per.proy_lineal_ayuda': 'Es gibt nicht genug eng beieinanderliegende Ablesungen in der vergleichbaren Jahreszeit, daher wird der durchschnittliche Tagesverbrauch verwendet. Er ist vor dem Winter unzuverlässig.', 'per.variacion': 'ggü. Vorzeitraum', 'per.incompleto': 'unvollständig',
+    'per.comparacion_ayuda': 'Verbrauch jedes Zählers pro Zeitraum. „Unvollständig“: der Zeitraum ist vorbei, aber Daten bis zum Ende fehlen (Endwert eintragen). Der laufende Zeitraum zählt bis zur letzten Ablesung. Der gestrichelte Balken ist die Prognose bis Jahresende, berechnet nach der Kälte des Vorjahres.',
     'per.ninguno': 'Noch keine Zeiträume. Lege den ersten mit dem Formular an.', 'per.sin_medidores': 'Lege zuerst die Zähler unter Zählerstände an.',
     'med.falta_cierre': 'Endwert des Vorzeitraums fehlt',
     'med.falta_cierre_ayuda': 'Der Verbrauch zwischen der letzten Ablesung und dem Ende des Vorzeitraums ist unbekannt. Trage dessen Endwert unter Heizung → Abrechnungszeiträume ein.',
@@ -967,16 +1108,16 @@ const I18N = {
     'med.dias': 'Tage', 'med.acumulado': 'Kumuliert', 'med.reinicio_badge': 'Reset', 'med.reinicio_auto': 'Reset (automatisch)',
     'med.guardada': 'Stand gespeichert', 'med.creado': 'Zähler angelegt', 'med.actualizado': 'Zähler aktualisiert',
     'med.confirmar_borrar': 'Zähler „{n}“ mit allen Ablesungen löschen?', 'med.primera': 'erste Ablesung',
-    'cons.periodo': 'im Zeitraum', 'cons.por_dia': '{v} pro Tag', 'cons.total': 'Gesamt seit Beginn: {v}', 'cons.total_todos': 'Gesamt',
+    'cons.periodo_ant': 'Vorzeitraum', 'cons.a_la_fecha': 'Bis Stichtag', 'cons.proyeccion': 'Prognose', 'cons.proy_total_ayuda': 'Summe der Prognosen je Zähler. Jede ist der bisherige Verbrauch + das Tempo dieses Zeitraums pro Gradtag × die Kälte derselben verbleibenden Daten im Vorjahr. Das ist eine Schätzung: Sie nimmt einen Winter wie den letzten und gleiches Heizen an.', 'cons.frio_ayuda': 'Verteilung nach Kälte: Zwischen zwei Ablesungen erhält jeder Tag Verbrauch nach seiner mittleren Außentemperatur (Open-Meteo). Kältere Tage erhalten mehr, Tage ab 15 °C fast nichts. Die Summe zwischen zwei Ablesungen bleibt gleich. Das ist eine Schätzung: Sie weiß nicht, wie tatsächlich geheizt wurde.', 'cons.estimado': 'geschätzt', 'cons.estimado_ayuda': 'Dieser Zeitraum hat keine Messwerte nahe diesem Datum, der Verbrauch bis hierher ist also unbekannt. Gezeigt wird der gesamte Zeitraum, ohne Prozentangabe.', 'cons.parcial': 'Unvollständige Daten: Der Vorzeitraum enthält nur für einen Teil dieser Daten Werte', 'cons.periodo': 'im Zeitraum', 'cons.por_dia': '{v} pro Tag', 'cons.total': 'Gesamt seit Beginn: {v}', 'cons.total_todos': 'Gesamt',
     'cons.acumulado_titulo': 'Kumulierter Verbrauch im Zeitraum', 'cons.barras_dia': 'Verbrauch pro Tag', 'cons.barras_mes': 'Verbrauch pro Monat',
     'cons.periodos': 'Zeiträume zwischen Ablesungen', 'cons.prom_dia': 'Ø/Tag',
-    'cons.ayuda': 'Zwischen zwei Ablesungen wird der Verbrauch gleichmäßig auf die Tage verteilt, daher kann ein Zeitraum nur einen Teil enthalten. Gezählt wird bis zur letzten Ablesung.',
+    'cons.ayuda': 'Zwischen zwei Ablesungen wird der Heizverbrauch nach der Kälte jedes Tages verteilt, daher kann ein Zeitraum nur einen Teil enthalten. Gezählt wird bis zur letzten Ablesung.',
     'cons.sin_medidores': 'Keine Zähler vorhanden. Lege sie unter Heizung → Zählerstände an.', 'err.lectura_invalida': 'Ungültiger Zählerstand',
     'nav.termostatos': 'Thermostate', 'termo.titulo': 'Thermostat', 'termo.cambiado': 'geändert {h}', 'termo.sin': 'nicht erfasst',
     'termo.nivel': 'Stufe', 'termo.historial': 'Thermostat-Änderungen', 'termo.dlg': 'Thermostatstufe erfassen', 'termo.dlg_editar': 'Thermostat-Änderung korrigieren',
     'err.termo_duplicado': 'Für diesen Raum gibt es zur selben Zeit schon eine andere Thermostat-Änderung',
     'termo.cuando': 'Ab (Datum & Uhrzeit)', 'termo.ahora': 'jetzt', 'termo.actual': 'Aktuelle Stufe', 'termo.guardado': 'Stufe gespeichert',
-    'termo.leyenda': '{n} · Thermostat', 'termo.apagado': 'Aus', 'termo.helada': 'Frostschutz', 'termo.subir': 'Halbe Stufe höher', 'termo.bajar': 'Halbe Stufe niedriger', 'grafico.termostatos': 'Thermostate',
+    'termo.leyenda': '{n} · Thermostat', 'termo.apagado': 'Aus', 'termo.helada': 'Frostschutz', 'termo.subir': 'Halbe Stufe höher', 'termo.bajar': 'Halbe Stufe niedriger', 'grafico.termostatos': 'Thermostate', 'grafico.nivel_termo': 'Thermostatstufe', 'grafico.mostrar': 'Anzeigen', 'grafico.ventanas': 'Fenster', 'grafico.referencia': 'Empfohlener Bereich',
     'termo.ayuda': 'Jede Stufe gilt bis zur nächsten Änderung. 0 = aus · Schneeflocke = Frostschutz (in der CSV als 0.5).',
     'grafico.ayuda_termo': 'Dünne Stufenlinie = Thermostatstufe (rechte Achse).',
     'grafico.tocar': 'Tippen zum Zoomen', 'grafico.listo': 'Fertig', 'grafico.pantalla': 'Vollbild', 'grafico.salir_pantalla': 'Vollbild beenden', 'grafico.girar': 'Handy drehen für Querformat',
@@ -987,7 +1128,7 @@ const I18N = {
     'manual.nombre_ph': 'Name, z. B. Bad', 'crear': 'Anlegen', 'manual.ninguno': 'Noch keine angelegt.',
     'manual.confirmar_borrar': '„{n}“ mit allen Messwerten löschen?', 'manual.creado': 'Sensor angelegt', 'manual.borrado': 'Sensor gelöscht',
     'manual.guardado': 'Messwert gespeichert', 'manual.no_hay': 'Lege zuerst unter Einstellungen einen manuellen Sensor an.',
-    'err.no_manual': 'Dieser Sensor ist nicht manuell', 'err.falta_nombre': 'Name fehlt', 'err.temp_invalida': 'Ungültige Temperatur',
+    'manual.pasar_manual': 'auf manuell umstellen', 'manual.vincular': 'Mit Zigbee-Sensor verknüpfen', 'manual.vinculado': 'Sensor verknüpft: Verlauf wurde auf den Zigbee-Sensor übertragen', 'manual.pasado': 'Sensor auf manuell umgestellt', 'manual.confirmar_vincular': '„{n}“ mit Sensor {d} verknüpfen? Messwerte und Name gehen auf den Zigbee-Sensor über.', 'manual.confirmar_pasar': '„{n}“ auf manuell umstellen? Der Verlauf bleibt erhalten.', 'err.destino_invalido': 'Ungültiger Zigbee-Sensor', 'err.no_automatico': 'Dieser Sensor ist nicht automatisch', 'err.no_manual': 'Dieser Sensor ist nicht manuell', 'err.falta_nombre': 'Name fehlt', 'err.temp_invalida': 'Ungültige Temperatur',
     'err.humedad_invalida': 'Ungültige Luftfeuchte (0–100)',
   },
 };
@@ -1112,7 +1253,7 @@ function traducirPagina() {
 const COLORES = ['#5856d6', '#e55353', '#2eb85c', '#f9b115', '#39f', '#9c27b0', '#e83e8c', '#20c997'];
 const COLOR_AFUERA = '#8a93a2';
 const DIA = 864e5;
-const TABS = ['panel', 'temperaturas', 'ventanas', 'termostatos', 'lecturas', 'consumo', 'periodos', 'agua', 'ajustes'];
+const TABS = ['panel', 'temperaturas', 'ventanas', 'termostatos', 'metricas', 'lecturas', 'consumo', 'periodos', 'agua', 'ajustes'];
 // Posiciones de la rueda: 0, ❄ (0.5, protección antiheladas) y de 1 a 5 de a medio punto
 const NIVELES = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
 const MARCAS_NIVEL = [0, 0.5, 1, 2, 3, 4, 5];   // las que llevan número (o ❄) en la escala
@@ -1129,7 +1270,7 @@ let estado = { sensores: [], afuera: {} };
 let colorDe = { afuera: COLOR_AFUERA };
 let listaVentanas = [];
 let tempCargadas = false;
-let filasTabla = [], idxTabla = {}, mostradas = 0;
+let filasTabla = [], idxTabla = {};
 let ubicPendiente = null;
 const graficos = {};
 const modal = coreui.Modal.getOrCreateInstance($('#dlg'));
@@ -1154,12 +1295,28 @@ function minutosTexto(min) {
   min = Math.max(0, Math.round(min));
   return min < 60 ? t('t.min', { n: min }) : t('t.hmin', { h: Math.floor(min / 60), m: pad(min % 60) });
 }
-const duracion = (a, b) => minutosTexto(((b ? new Date(b) : new Date()) - new Date(a)) / 6e4);
-function hace(s) {
+const duracionTexto = (a, b) => minutosTexto(((b ? new Date(b) : new Date()) - new Date(a)) / 6e4);
+function haceTexto(s) {
   const min = Math.round((Date.now() - new Date(s)) / 6e4);
   if (min < 1) return t('t.recien');
   if (min < 60 * 24) return t('t.hace', { x: minutosTexto(min) });
   return t('t.hace', { x: t('t.dias', { n: Math.floor(min / 1440) }) });
+}
+// Versiones "en vivo": devuelven un <span> que actualizarTiemposVivos() refresca sin recargar la página
+// Cronómetro para lo que sigue abierto: m:ss, o h:mm:ss a partir de una hora
+function cronometro(a) {
+  const seg = Math.max(0, Math.floor((Date.now() - new Date(a)) / 1000));
+  const h = Math.floor(seg / 3600), m = Math.floor(seg / 60) % 60, ss = pad(seg % 60);
+  return h ? `${h}:${pad(m)}:${ss}` : `${m}:${ss}`;
+}
+const duracion = (a, b) => b ? duracionTexto(a, b)
+  : `<span class="tabular" data-vivo="dur" data-desde="${esc(a)}">${cronometro(a)}</span>`;
+const hace = s => `<span data-vivo="hace" data-desde="${esc(s)}">${haceTexto(s)}</span>`;
+function actualizarTiemposVivos() {
+  for (const el of document.querySelectorAll('[data-vivo]')) {
+    const txt = el.dataset.vivo === 'dur' ? cronometro(el.dataset.desde) : haceTexto(el.dataset.desde);
+    if (el.textContent !== txt) el.textContent = txt;
+  }
 }
 // Nombre de la ubicación en el idioma activo (las configuraciones viejas solo tienen "nombre")
 const nombreUbicacion = () => estado.ubicacion?.nombres?.[idioma] || estado.ubicacion?.nombre || '';
@@ -1267,17 +1424,91 @@ $('#dlg-confirmar').addEventListener('hidden.coreui.modal', () => {
   p?.resolver(p.ok);
 });
 
-async function api(url, opts = {}) {
-  const r = await fetch(url, {
-    ...opts,
-    headers: { 'Content-Type': 'application/json' },
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-  });
-  if (r.status === 401) { location.href = '/login'; throw new Error(t('err.sesion')); }
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(d.error ? t(d.error) : t('err.http', { n: r.status }));
-  return d;
+// Barra de carga: solo aparece si una petición tarda más de un instante, para no parpadear en las rápidas
+let peticiones = 0, temporizadorCarga = null;
+function cargaMas(n) {
+  peticiones = Math.max(0, peticiones + n);
+  if (peticiones > 0 && !temporizadorCarga) {
+    temporizadorCarga = setTimeout(() => {
+      $('#barra-carga')?.classList.add('activa');
+      if (tabActual() !== 'panel') document.body.classList.add('cargando');
+    }, 150);
+  } else if (peticiones === 0) {
+    clearTimeout(temporizadorCarga); temporizadorCarga = null;
+    $('#barra-carga')?.classList.remove('activa');
+    document.body.classList.remove('cargando');
+  }
 }
+async function api(url, { silencioso, ...opts } = {}) {
+  if (!silencioso) cargaMas(1);
+  try {
+    const r = await fetch(url, {
+      ...opts,
+      headers: { 'Content-Type': 'application/json' },
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    });
+    if (r.status === 401) { location.href = '/login'; throw new Error(t('err.sesion')); }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error ? t(d.error) : t('err.http', { n: r.status }));
+    return d;
+  } finally { if (!silencioso) cargaMas(-1); }
+}
+
+// ======================================================================
+//  Paginación de tablas
+// ======================================================================
+const FILAS_POR_PAGINA = 25;
+const paginaActual = {};   // id de tabla -> página (desde 0); se conserva al refrescar los datos
+
+function paginaDe(id, total) {
+  const ultima = Math.max(Math.ceil(total / FILAS_POR_PAGINA) - 1, 0);
+  return paginaActual[id] = Math.min(paginaActual[id] || 0, ultima);
+}
+
+function dibujarPaginador(id, tabla, total, alCambiar) {
+  const pag = paginaDe(id, total), paginas = Math.ceil(total / FILAS_POR_PAGINA);
+  let nav = document.getElementById(`pag-${id}`);
+  if (!nav) {
+    nav = document.createElement('div');
+    nav.id = `pag-${id}`;
+    nav.className = 'd-flex flex-wrap justify-content-between align-items-center gap-2 px-3 py-2 small text-body-secondary border-top';
+    (tabla.closest('.table-responsive') || tabla).after(nav);
+    nav.addEventListener('click', e => {
+      const b = e.target.closest('button[data-pag]');
+      if (!b || b.disabled) return;
+      paginaActual[id] = Number(b.dataset.pag);
+      nav.alCambiar();
+    });
+  }
+  nav.alCambiar = alCambiar;
+  nav.classList.toggle('d-none', total <= FILAS_POR_PAGINA);
+  nav.classList.toggle('d-flex', total > FILAS_POR_PAGINA);
+  const boton = (texto, clave, destino, activo) => `<li class="page-item ${activo ? '' : 'disabled'}">
+    <button class="page-link" type="button" data-pag="${destino}" aria-label="${esc(t(clave))}" title="${esc(t(clave))}" ${activo ? '' : 'disabled'}>${texto}</button></li>`;
+  nav.innerHTML = `<span class="tabular">${t('pag.rango', { a: entero(pag * FILAS_POR_PAGINA + 1), b: entero(Math.min((pag + 1) * FILAS_POR_PAGINA, total)), n: entero(total) })}</span>
+    <ul class="pagination pagination-sm mb-0">
+      ${boton('«', 'pag.primera', 0, pag > 0)}${boton('‹', 'pag.anterior', pag - 1, pag > 0)}
+      <li class="page-item disabled"><span class="page-link tabular">${t('pag.pagina', { p: entero(pag + 1), n: entero(paginas) })}</span></li>
+      ${boton('›', 'pag.siguiente', pag + 1, pag < paginas - 1)}${boton('»', 'pag.ultima', paginas - 1, pag < paginas - 1)}
+    </ul>`;
+}
+
+// Para tablas ya dibujadas: oculta las filas de las otras páginas (tabla completa o directamente su <tbody>)
+function paginarTabla(selector) {
+  const el = $(selector), cuerpo = el.tagName === 'TBODY' ? el : el.tBodies[0], tabla = cuerpo.closest('table');
+  const id = selector.slice(1), filas = [...cuerpo.rows];
+  const mostrar = () => {
+    const desde = paginaDe(id, filas.length) * FILAS_POR_PAGINA;
+    filas.forEach((f, i) => { f.hidden = i < desde || i >= desde + FILAS_POR_PAGINA; });
+    dibujarPaginador(id, tabla, filas.length, mostrar);
+  };
+  mostrar();
+}
+
+// Un filtro nuevo vuelve a la primera página
+const reiniciarPaginas = () => Object.keys(paginaActual).forEach(k => delete paginaActual[k]);
+document.addEventListener('click', e => { if (e.target.closest('[id$="-aplicar"]')) reiniciarPaginas(); }, true);
+document.addEventListener('change', e => { if (e.target.matches('#md-filtro, #cs-medidor')) reiniciarPaginas(); }, true);
 
 // ======================================================================
 //  Idioma y tema
@@ -1300,6 +1531,7 @@ function cambiarIdioma(nuevo) {
   else if (tab === 'temperaturas') cargarTemperaturas();
   else if (tab === 'ventanas') cargarVentanas();
   else if (tab === 'termostatos') cargarTermostatos();
+  else if (tab === 'metricas') cargarMetricas();
   else if (tab === 'lecturas') renderLecturas();
   else if (tab === 'periodos') renderPeriodos();
   else if (tab === 'agua') renderAgua();
@@ -1341,6 +1573,7 @@ function mostrarTab() {
   if (tab === 'periodos') mostrarPeriodos();
   if (tab === 'agua') mostrarAgua();
   if (tab === 'ajustes') renderAjustes();
+  if (tab === 'metricas') cargarMetricas();
   if (tab === 'panel') cargarGraficoPanel().catch(err => aviso(err.message));
 }
 window.addEventListener('hashchange', mostrarTab);
@@ -1348,8 +1581,8 @@ window.addEventListener('hashchange', mostrarTab);
 // ======================================================================
 //  Panel
 // ======================================================================
-async function cargarEstado() {
-  estado = await api('/api/estado');
+async function cargarEstado(silencioso = false) {
+  estado = await api('/api/estado', { silencioso });
   estado.sensores.map(s => s.id).sort().forEach((id, i) => colorDe[id] = COLORES[i % COLORES.length]);
   estado.sensores.sort((a, b) => nombreDe(a.id).localeCompare(nombreDe(b.id), idioma));
   // Si alguien abrió o cerró una ventana (desde este u otro dispositivo), se redibuja el gráfico
@@ -1359,12 +1592,68 @@ async function cargarEstado() {
   renderTarjetas();
   rellenarSelects();
   pieYCabecera();
+  if (tabActual() === 'ajustes') renderSensoresAjustes();
+}
+
+// Tiempo real: cada segundos_vivo (Ajustes) se consulta una versión liviana y se actualiza solo si llegó un dato nuevo.
+// Cada 30 s como mínimo se recarga igual, por lo que no sube la versión (clima, ventanas abiertas desde otro dispositivo).
+// Se pausa con un modal abierto, con un clic o arrastre en curso y al escribir en un campo, para no mover nada bajo el usuario.
+const MS_RECARGA_MINIMA = 30000;
+let versionVivo = null, ultimaRecarga = Date.now(), punteroPresionado = false;
+document.addEventListener('pointerdown', () => { punteroPresionado = true; }, true);
+for (const ev of ['pointerup', 'pointercancel']) document.addEventListener(ev, () => { punteroPresionado = false; }, true);
+
+async function seguirEnVivo() {
+  if (document.hidden || punteroPresionado || document.querySelector('.modal.show')
+      || document.activeElement?.matches('select, textarea, input:not([type=range])')) return;
+  try {
+    const { version } = await api('/api/vivo', { silencioso: true });
+    const cambio = version !== versionVivo;
+    if (!cambio && Date.now() - ultimaRecarga < MS_RECARGA_MINIMA) return;
+    await cargarEstado(true);
+    versionVivo = version;
+    ultimaRecarga = Date.now();
+    if (cambio && tabActual() === 'panel' && ultimoDibujo['graf-panel']) dibujar('graf-panel', ...ultimoDibujo['graf-panel']);
+  } catch { /* se reintenta en la próxima vuelta */ }
+}
+
+// setTimeout encadenado: toma enseguida un intervalo nuevo y nunca se solapan dos consultas
+function programarVivo() {
+  setTimeout(async () => { await seguirEnVivo(); programarVivo(); }, (estado?.segundos_vivo || 10) * 1000);
 }
 
 function pieYCabecera() {
   const a = estado.afuera || {};
   $('#hora-afuera').innerHTML = a.temperatura != null ? `<i class="cil-location-pin me-1"></i>${esc(nombreUbicacion().split(',')[0])} ${num(a.temperatura)} °C` : '';
   $('#pie-intervalo').textContent = estado.intervalo_minutos ? t('pie.guardando', { n: estado.intervalo_minutos }) : '';
+  renderNotificaciones();
+}
+
+const insigniaSinSenal = () => `<span class="badge text-bg-danger"><i class="cil-warning me-1"></i>${t('sen.sin_senal')}</span>`;
+
+function renderNotificaciones() {
+  const caidos = estado.sensores.filter(s => s.conexion === 'offline');
+  const contador = $('#campana-contador');
+  contador.hidden = !caidos.length;
+  contador.textContent = caidos.length || '';
+  $('#campana').setAttribute('aria-label', `${t('sen.notificaciones')}: ${caidos.length}`);
+  $('#campana-lista').innerHTML = caidos.length ? caidos.map(s => {
+    const ultima = s.corte?.ultima_lectura || s.ultima_lectura;
+    return `<a class="dropdown-item d-flex align-items-start gap-2" href="#ajustes">
+      <i class="cil-warning text-danger mt-1"></i>
+      <span class="text-wrap"><strong>${esc(nombreDe(s.id))}</strong>
+        <span class="d-block small text-body-secondary">${t('sen.sin_senal')}${ultima ? ` · ${t('sen.ultima')} ${hace(ultima)}` : ''}</span></span>
+    </a>`;
+  }).join('') : `<div class="px-3 py-2 small text-body-secondary">${t('sen.sin_notificaciones')}</div>`;
+}
+
+// Color según la distancia al rango recomendado: dentro = verde, hasta la tolerancia = amarillo, más lejos = rojo
+const TOLERANCIA_REF = { temperatura: 2, humedad: 10 };
+function claseRango(metrica, valor) {
+  if (valor == null) return '';
+  const met = METRICAS[metrica], ref = estado[met.ref] || met.refDef;
+  const dist = valor < ref.min ? ref.min - valor : valor > ref.max ? valor - ref.max : 0;
+  return dist === 0 ? 'text-success' : dist <= TOLERANCIA_REF[metrica] ? 'text-warning' : 'text-danger';
 }
 
 function renderTarjetas() {
@@ -1388,9 +1677,10 @@ function renderTarjetas() {
       <div class="card-body d-flex flex-column">
         <div class="d-flex align-items-center flex-wrap gap-2 fw-semibold">${punto(s.id)}<span class="text-truncate">${esc(nombreDe(s.id))}</span>
           ${manual ? `<span class="badge text-bg-secondary fw-normal">${t('manual')}</span>` : ''}
+          ${s.conexion === 'offline' ? insigniaSinSenal() : ''}
           ${v ? `<span class="badge text-bg-warning ms-auto">${t('abierta')}</span>` : ''}</div>
-        <div class="temp-grande my-2">${num(s.temperatura)} °C</div>
-        <div class="small text-body-secondary"><i class="cil-drop"></i> ${num(s.humedad, 0)} %${manual ? '' : ` · <i class="cil-battery-full"></i> ${s.bateria ?? '–'} %`}</div>
+        <div class="temp-grande my-2 ${claseRango('temperatura', s.temperatura)}">${num(s.temperatura)} °C</div>
+        <div class="small text-body-secondary"><i class="cil-drop"></i> <span class="fw-semibold ${claseRango('humedad', s.humedad)}">${num(s.humedad, 0)} %</span>${manual ? '' : ` · <i class="cil-battery-full"></i> ${s.bateria ?? '–'} %`}</div>
         <div class="small text-body-secondary">${s.ultima_lectura ? t(manual ? 'manual.ultimo' : 'ultima_lectura', { h: hace(s.ultima_lectura) }) : t('sin_lecturas')}</div>
         ${htmlSelectorTermostato(s)}
         <div class="mt-auto pt-3 d-grid gap-2">
@@ -1496,11 +1786,81 @@ function rellenarSelects() {
 }
 
 async function cargarGraficoPanel() {
-  const hasta = new Date(), desde = new Date(Date.now() - DIA);
+  // El día de hoy, de 00:00 a 24:00: los datos llegan hasta ahora y la línea avanza con el día
+  const hasta = new Date(), desde = new Date(); desde.setHours(0, 0, 0, 0);
+  const finDia = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate() + 1).getTime();
   const q = new URLSearchParams({ desde: isoLocal(desde), hasta: isoLocal(hasta) });
   const [d, v, tm] = await Promise.all([api('/api/temperaturas?' + q), api('/api/ventanas?' + q), api('/api/termostatos?' + q)]);
   d.termostatos = tm;
-  dibujar('graf-panel', d, v, [inicioSegunDatos(d, v, desde.getTime(), hasta.getTime()), hasta.getTime()]);
+  dibujar('graf-panel', d, v, [desde.getTime(), finDia]);
+  cargarConsumo24().catch(err => aviso(err.message));
+}
+
+// Consumo acumulado de calefacción del día de hoy (00:00 a 24:00), por habitación. La línea de hoy se dibuja hasta ahora
+// y avanza con el día. Parte de 0 a las 00:00; si la lectura anterior cae fuera, el primer tramo se reparte proporcionalmente.
+async function cargarConsumo24() {
+  await cargarMedidores();
+  const ahora = Date.now(), medianoche = new Date(); medianoche.setHours(0, 0, 0, 0);
+  const ini = medianoche.getTime(), fin = new Date(medianoche.getFullYear(), medianoche.getMonth(), medianoche.getDate() + 1).getTime();
+  const datasets = [];
+  const hora = l => new Date(l.fecha_hora).getTime();
+  // Puntos (x, consumo acumulado) de un medidor entre ini y fin; null si no hay lecturas suficientes
+  const serie = (filas, ini, fin, hastaAhora = false) => {
+    let i0 = filas.findLastIndex(l => hora(l) <= ini);
+    if (i0 < 0) i0 = filas.findIndex(l => hora(l) > ini);
+    const dentro = i0 < 0 ? [] : filas.slice(i0 + 1).filter(l => hora(l) > ini && hora(l) <= fin);
+    if (i0 < 0 || !dentro.length) return null;
+    const base = filas[i0], pts = [];
+    let aporte = 0;   // lo consumido entre la lectura base y el inicio de la ventana, que no cuenta
+    if (hora(base) < ini) {
+      pts.push({ x: ini, y: 0 });
+      const prim = dentro[0], parte = (hora(prim) - ini) / (hora(prim) - hora(base));
+      aporte = (1 - parte) * (prim.acumulado - base.acumulado);
+    } else pts.push({ x: hora(base), y: 0 });
+    for (const l of dentro) pts.push({ x: hora(l), y: l.acumulado - base.acumulado - aporte });
+    if (!hastaAhora) pts.push({ x: fin, y: pts[pts.length - 1].y });   // hoy termina en la última lectura real
+    return pts;
+  };
+  for (const m of medidores) {
+    const filas = lecturasMed.filter(l => l.medidor === m.id && !l.virtual)
+      .sort((a, b) => a.fecha_hora.localeCompare(b.fecha_hora));
+    const hoy = serie(filas, ini, ahora, true), ayer = serie(filas, ini - DIA, ini);
+    const punto = n => ctx => ctx.dataIndex === 0 || ctx.dataIndex === n - 1 ? 0 : 3;
+    // El día anterior se dibuja desplazado 24 h, para compararlo hora a hora con hoy (de 00:00 a 24:00)
+    if (ayer) datasets.push({ label: t('panel.consumo24_ayer', { n: m.nombre }), unidad: unidadDe(m), ayer: true,
+      data: ayer.map(p => ({ x: p.x + DIA, y: p.y })), borderColor: colorMed[m.id], backgroundColor: colorMed[m.id],
+      borderWidth: 1.5, borderDash: [5, 4], pointRadius: punto(ayer.length), tension: 0 });
+    if (hoy) datasets.push({ label: m.nombre, unidad: unidadDe(m), data: hoy, borderColor: colorMed[m.id], backgroundColor: colorMed[m.id],
+      borderWidth: 2, pointRadius: punto(hoy.length), tension: 0 });
+  }
+  $('#consumo24-vacio').hidden = datasets.length > 0;
+  $('.grafico:has(#graf-consumo24)').hidden = datasets.length === 0;
+  graficos['graf-consumo24']?.destroy();
+  delete graficos['graf-consumo24'];
+  if (!datasets.length) return;
+  const css = getComputedStyle(document.documentElement);
+  const texto = css.getPropertyValue('--cui-body-color').trim() || '#666';
+  const grid = css.getPropertyValue('--cui-border-color-translucent').trim() || 'rgba(0,0,0,.1)';
+  graficos['graf-consumo24'] = new Chart(document.getElementById('graf-consumo24'), {
+    type: 'line', data: { datasets },
+    options: {
+      animation: false, maintainAspectRatio: false, parsing: false,
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
+      scales: {
+        x: { type: 'linear', min: ini, max: fin, grid: { color: grid },
+             afterBuildTicks: eje => { eje.ticks = marcasTiempo(eje.min, eje.max); },
+             ticks: { color: texto, maxRotation: 0, callback(v) { return etiquetaEje(v, this.max - this.min); } } },
+        y: { beginAtZero: true, grace: '5%', grid: { color: grid }, ticks: { color: texto, includeBounds: false } },
+      },
+      plugins: {
+        legend: { labels: { color: texto, boxWidth: 14, boxHeight: 2 } },
+        tooltip: { callbacks: {
+          title: it => it.length ? fmtFechaHora(isoLocal(new Date(it[0].parsed.x - (it[0].dataset.ayer ? DIA : 0)))) : '',
+          label: it => `${it.dataset.label}: +${num(it.parsed.y, Number.isInteger(it.parsed.y) ? 0 : 1)} ${it.dataset.unidad}`,
+        } },
+      },
+    },
+  });
 }
 
 // ======================================================================
@@ -1610,7 +1970,7 @@ const referenciasPlugin = {
       const py = y.getPixelForValue(valor);
       if (py < a.top || py > a.bottom) continue;
       const ancho = ctx.measureText(texto).width + 10, alto = 16;
-      const x = a.right - ancho - 4, cy = py + (abajo ? alto / 2 + 2 : -alto / 2 - 2);
+      const x = a.left + 4, cy = py + (abajo ? alto / 2 + 2 : -alto / 2 - 2);
       ctx.globalAlpha = 0.85;
       ctx.fillStyle = fondo;
       ctx.beginPath(); ctx.roundRect(x, cy - alto / 2, ancho, alto, 4); ctx.fill();
@@ -1639,6 +1999,17 @@ function seriesDe(datos, campo = 'temperatura') {
     (series[f[i.sensor]] ??= []).push({ x: new Date(f[i.fecha_hora]).getTime(), y });
   }
   return series;
+}
+
+// Agrega al final de cada línea la última lectura recibida, aunque todavía no se haya guardado. Solo se dibuja: el
+// registro sigue guardando según su intervalo.
+function agregarPuntosVivos(series, campo, rango) {
+  for (const s of estado.sensores) {
+    const y = parseFloat(s[campo]);
+    if (s.manual || s.conexion === 'offline' || !s.ultima_lectura || isNaN(y)) continue;
+    const x = new Date(s.ultima_lectura).getTime(), linea = series[s.id] ??= [];
+    if (x >= rango[0] && x > (linea.at(-1)?.x ?? -Infinity)) linea.push({ x, y });
+  }
 }
 
 // Marcas del eje en horarios "redondos" según el rango visible (de 5 min a 30 días), en hora local
@@ -1703,7 +2074,7 @@ function redibujarGraficos() {
 }
 
 // Preferencias de vista por gráfico (eje del zoom y rango del eje Y), recordadas en este navegador
-const VISTA_DEF = { modo: 'x', metrica: 'temperatura', ejes: {}, termostatos: true };
+const VISTA_DEF = { modo: 'x', metrica: 'temperatura', ejes: {}, termostatos: true, ventanas: true, referencia: true };
 // Rango del eje Y de la magnitud que se está viendo (cada magnitud recuerda el suyo)
 function ejeY(v) {
   v.ejes ??= {};
@@ -1725,6 +2096,7 @@ function htmlControles(id) {
   const v = vistaDe(id), ey = ejeY(v);
   const metrica = m => `<button type="button" class="btn btn-outline-secondary ${v.metrica === m ? 'active' : ''}" data-metrica="${m}" aria-pressed="${v.metrica === m}">${t('grafico.' + m)}</button>`;
   const modo = m => `<button type="button" class="btn btn-outline-secondary ${v.modo === m ? 'active' : ''}" data-modo="${m}" aria-pressed="${v.modo === m}">${{ x: 'X', y: 'Y', xy: 'X+Y' }[m]}</button>`;
+  const capa = k => `<button type="button" class="btn btn-outline-secondary ${v[k] ? 'active' : ''}" data-capa="${k}" aria-pressed="${!!v[k]}">${t('grafico.' + k)}</button>`;
   return `<div class="d-flex flex-wrap align-items-center gap-2 small">
     <div class="btn-group btn-group-sm" role="group" aria-label="${esc(t('grafico.magnitud'))}">${metrica('temperatura')}${metrica('humedad')}</div>
     <div class="vr mx-1 d-none d-sm-block"></div>
@@ -1743,10 +2115,8 @@ function htmlControles(id) {
     <input type="number" class="form-control form-control-sm" style="width:5.2rem" step="0.5" data-ymin value="${esc(ey.yMin)}" placeholder="${esc(t('min'))}" aria-label="${esc(t('grafico.eje_y') + ' ' + t('min'))}" ${ey.yAuto ? 'disabled' : ''}>
     <input type="number" class="form-control form-control-sm" style="width:5.2rem" step="0.5" data-ymax value="${esc(ey.yMax)}" placeholder="${esc(t('max'))}" aria-label="${esc(t('grafico.eje_y') + ' ' + t('max'))}" ${ey.yAuto ? 'disabled' : ''}>
     <div class="vr mx-1 d-none d-sm-block"></div>
-    <div class="form-check form-switch mb-0">
-      <input class="form-check-input" type="checkbox" role="switch" id="termo-${id}" data-termosw ${v.termostatos ? 'checked' : ''}>
-      <label class="form-check-label" for="termo-${id}">${t('grafico.termostatos')}</label>
-    </div>
+    <span class="text-body-secondary">${t('grafico.mostrar')}</span>
+    <div class="btn-group btn-group-sm" role="group" aria-label="${esc(t('grafico.mostrar'))}">${capa('termostatos')}${capa('ventanas')}${capa('referencia')}</div>
     <button type="button" class="btn btn-sm btn-outline-secondary" data-reset="${id}" hidden><i class="cil-zoom-out me-1"></i>${t('grafico.reset')}</button>
   </div>`;
 }
@@ -1771,6 +2141,16 @@ document.addEventListener('click', e => {
     if (id === 'graf-temp' && ultimoDibujo[id]) renderResumenTemp(ultimoDibujo[id][0]);
     return;
   }
+  const bCapa = e.target.closest('[data-capa]');
+  if (bCapa) {
+    const k = bCapa.dataset.capa;
+    v[k] = !v[k];
+    guardarVista(id);
+    bCapa.classList.toggle('active', v[k]);
+    bCapa.setAttribute('aria-pressed', v[k]);
+    if (ultimoDibujo[id]) dibujar(id, ...ultimoDibujo[id]);
+    return;
+  }
   const bModo = e.target.closest('[data-modo]');
   if (bModo) {
     v.modo = bModo.dataset.modo;
@@ -1792,13 +2172,6 @@ document.addEventListener('click', e => {
 
 document.addEventListener('change', e => {
   const cont = e.target.closest('[data-controles]');
-  if (cont && e.target.matches('[data-termosw]')) {
-    const id = cont.dataset.controles;
-    vistaDe(id).termostatos = e.target.checked;
-    guardarVista(id);
-    if (ultimoDibujo[id]) dibujar(id, ...ultimoDibujo[id]);
-    return;
-  }
   if (!cont || !e.target.matches('[data-yauto], [data-ymin], [data-ymax]')) return;
   const id = cont.dataset.controles, chart = graficos[id], v = vistaDe(id);
   const mn = cont.querySelector('[data-ymin]'), mx = cont.querySelector('[data-ymax]');
@@ -1844,14 +2217,18 @@ function dibujar(id, datos, ventanas, rango, opciones = {}) {
   const ocultos = new Set(previo ? previo.data.datasets.filter((d, i) => !previo.isDatasetVisible(i)).map(d => d.sid) : []);
 
   const series = seriesDe(datos, vista.metrica);
+  if (id === 'graf-panel') agregarPuntosVivos(series, vista.metrica, rango);
   const orden = Object.keys(series).sort((a, b) => a === 'afuera' ? 1 : b === 'afuera' ? -1 : nombreDe(a).localeCompare(nombreDe(b), idioma));
+  // Los sensores Zigbee cortan la línea cuando faltan lecturas; los manuales son puntos sueltos y se unen siempre
+  const huecoZigbee = Math.max(3 * (estado.intervalo_minutos || 10), 30) * 6e4;
   const datasets = orden.map(sid => {
     const manual = esManual(sid);
     return {
       sid, label: nombreDe(sid), data: series[sid], hidden: ocultos.has(sid), yAxisID: 'y',
       borderColor: colorDe[sid] || '#999', backgroundColor: colorDe[sid] || '#999',
       borderWidth: sid === 'afuera' ? 1.5 : 2, borderDash: sid === 'afuera' ? [5, 4] : [],
-      pointRadius: manual ? 3 : series[sid].length <= 60 ? 2.5 : 0, pointHoverRadius: 4, tension: 0.25, spanGaps: true,
+      pointRadius: manual ? 3 : series[sid].length <= 60 ? 2.5 : 0, pointHoverRadius: 4, tension: 0.25,
+      spanGaps: manual || sid === 'afuera' ? true : huecoZigbee,
     };
   });
   const escalones = vista.termostatos ? seriesTermostato(datos.termostatos || [], rango) : {};
@@ -1864,7 +2241,7 @@ function dibujar(id, datos, ventanas, rango, opciones = {}) {
   }
   const hayTermostatos = Object.keys(escalones).length > 0;
   const filas = {};
-  const bandas = ventanas.map(v => ({
+  const bandas = (vista.ventanas ? ventanas : []).map(v => ({
     sid: v.sensor, nombre: nombreDe(v.sensor), color: colorDe[v.sensor] || '#999',
     desde: new Date(v.inicio).getTime(), hasta: v.fin ? new Date(v.fin).getTime() : Date.now(), abierta: !v.fin,
     fila: filas[v.sensor] ??= Object.keys(filas).length,
@@ -1891,7 +2268,7 @@ function dibujar(id, datos, ventanas, rango, opciones = {}) {
              suggestedMin: ref.min - met.margenRef, suggestedMax: ref.max + met.margenRef, grid: { color: grid }, ticks: { color: texto, includeBounds: false, callback: v => `${num(v, Number.isInteger(v) ? 0 : 1)} ${met.unidad}` } },
         y2: {
           display: hayTermostatos, position: 'right', min: 0, max: 5, grid: { drawOnChartArea: false },
-          title: { display: true, text: t('termo.nivel'), color: texto },
+          title: { display: true, text: t('grafico.nivel_termo'), color: texto },
           afterBuildTicks: eje => { eje.ticks = MARCAS_NIVEL.map(value => ({ value })); },
           ticks: {
             color: texto,
@@ -1920,7 +2297,7 @@ function dibujar(id, datos, ventanas, rango, opciones = {}) {
           },
         },
         bandas: { bandas },
-        referencias: { rango: ref, textoMin: t('ref.min', { v: `${num(ref.min, Number.isInteger(ref.min) ? 0 : 1)} ${met.unidad}` }),
+        referencias: !vista.referencia ? {} : { rango: ref, textoMin: t('ref.min', { v: `${num(ref.min, Number.isInteger(ref.min) ? 0 : 1)} ${met.unidad}` }),
                                     textoMax: t('ref.max', { v: `${num(ref.max, Number.isInteger(ref.max) ? 0 : 1)} ${met.unidad}` }) },
         zoom: {
           limits: { x: { min: rango[0], max: rango[1], minRange: 15 * 6e4 }, y: met.limites, y2: { min: 0, max: 5, minRange: 5 } },
@@ -1976,10 +2353,9 @@ async function cargarTemperaturas() {
 
   idxTabla = Object.fromEntries(d.columnas.map((c, n) => [c, n]));
   filasTabla = d.filas.slice().reverse();
-  mostradas = 0;
   $('#t-titulo').textContent = t('temp.registros', { n: entero(filasTabla.length) });
   $('#t-tabla').innerHTML = `<thead><tr><th>${t('fecha_hora')}</th><th>${t('habitacion')}</th><th class="text-end">${t('temp_corta')}</th><th class="text-end">${t('humedad')}</th><th class="text-end">${t('bateria')}</th><th></th></tr></thead><tbody></tbody>`;
-  mostrarMasFilas();
+  mostrarPaginaTemp();
 }
 
 function renderResumenTemp(d) {
@@ -1995,20 +2371,18 @@ function renderResumenTemp(d) {
   }).join('') || `<div class="col text-body-secondary small">${t('sin_datos')}</div>`;
 }
 
-function mostrarMasFilas() {
-  const i = idxTabla;
-  const lote = filasTabla.slice(mostradas, mostradas + 200);
-  mostradas += lote.length;
-  $('#t-tabla tbody').insertAdjacentHTML('beforeend', lote.map(f => `<tr>
+function mostrarPaginaTemp() {
+  const i = idxTabla, tabla = $('#t-tabla'), cuerpo = tabla.querySelector('tbody');
+  const desde = paginaDe('t-tabla', filasTabla.length) * FILAS_POR_PAGINA;
+  cuerpo.innerHTML = filasTabla.length
+    ? filasTabla.slice(desde, desde + FILAS_POR_PAGINA).map(f => `<tr>
     <td>${fmtFechaHora(f[i.fecha_hora])}</td><td><span class="d-inline-flex align-items-center gap-2">${punto(f[i.sensor])}${esc(nombreDe(f[i.sensor]))}</span></td>
     <td class="text-end">${num(f[i.temperatura])} °C</td><td class="text-end">${num(f[i.humedad], 0)} %</td>
     <td class="text-end">${f[i.bateria] ? f[i.bateria] + ' %' : '–'}</td>
-    <td class="text-end">${esManual(f[i.sensor]) ? `<button class="btn btn-sm btn-ghost-danger py-0" data-sensor="${esc(f[i.sensor])}" data-fecha="${esc(f[i.fecha_hora])}" title="${esc(t('borrar'))}" aria-label="${esc(t('borrar'))}"><i class="cil-trash"></i></button>` : ''}</td></tr>`).join(''));
-  if (!filasTabla.length) $('#t-tabla tbody').innerHTML = `<tr><td colspan="6" class="text-center text-body-secondary py-4">${t('sin_registros')}</td></tr>`;
-  $('#t-mas').innerHTML = mostradas < filasTabla.length ? `<button class="btn btn-outline-secondary btn-sm" id="t-mas-btn">${t('mostrar_mas', { n: entero(filasTabla.length - mostradas) })}</button>` : '';
-  $('#t-mas').hidden = !$('#t-mas').innerHTML;
+    <td class="text-end">${esManual(f[i.sensor]) ? `<button class="btn btn-sm btn-ghost-danger py-0" data-sensor="${esc(f[i.sensor])}" data-fecha="${esc(f[i.fecha_hora])}" title="${esc(t('borrar'))}" aria-label="${esc(t('borrar'))}"><i class="cil-trash"></i></button>` : ''}</td></tr>`).join('')
+    : `<tr><td colspan="6" class="text-center text-body-secondary py-4">${t('sin_registros')}</td></tr>`;
+  dibujarPaginador('t-tabla', tabla, filasTabla.length, mostrarPaginaTemp);
 }
-$('#t-mas').addEventListener('click', e => { if (e.target.id === 't-mas-btn') mostrarMasFilas(); });
 $('#t-aplicar').addEventListener('click', cargarTemperaturas);
 $('#t-tabla').addEventListener('click', async e => {
   const b = e.target.closest('button[data-fecha]');
@@ -2054,6 +2428,14 @@ $('#dlgl-form').addEventListener('submit', async e => {
 // ======================================================================
 //  Pestaña Ventanas
 // ======================================================================
+function efectoVentana(i) {
+  if (!i) return `<span class="text-body-secondary">${t('vent.sin_datos')}</span>`;
+  const clase = i.caida >= 2 ? 'text-danger' : i.caida >= 0.5 ? 'text-warning' : 'text-body-secondary';
+  const aprox = i.aproximado ? `<span title="${esc(t('vent.aprox_ayuda'))}">≈</span>` : '';
+  return `${aprox}${num(i.temp_antes)} → ${num(i.temp_min)} °C <span class="fw-semibold ${clase}">(${i.caida > 0 ? '−' : '+'}${num(Math.abs(i.caida))})</span>
+    <span class="small text-body-secondary">· ${minutosTexto(i.minutos_a_min)}</span>`;
+}
+
 async function cargarVentanas() {
   const p = paramsRango('#v-desde', '#v-hasta');
   if ($('#v-sensor').value) p.set('sensor', $('#v-sensor').value);
@@ -2069,22 +2451,30 @@ async function cargarVentanas() {
   const widget = (titulo, valor, sub, color) => `<div class="col-6 col-lg-3"><div class="card h-100" style="border-top:3px solid ${color}">
     <div class="card-body py-3"><div class="small text-body-secondary text-truncate">${titulo}</div>
     <div class="fs-5 fw-semibold">${valor}</div><div class="small text-body-secondary">${sub}</div></div></div></div>`;
+  const caidas = listaVentanas.filter(v => v.impacto).map(v => v.impacto.caida);
+  const caidaMedia = caidas.length ? caidas.reduce((a, b) => a + b, 0) / caidas.length : null;
+  const caidasHum = listaVentanas.map(v => v.impacto?.hum_caida).filter(x => x != null);
+  const caidaHumMedia = caidasHum.length ? caidasHum.reduce((a, b) => a + b, 0) / caidasHum.length : null;
   $('#v-resumen').innerHTML = widget(t('total'), t('n_aperturas', { n: listaVentanas.length }), t('abiertas_total', { d: minutosTexto(totalMin) }), 'var(--cui-primary)') +
+    widget(t('vent.caida_media'), caidaMedia == null ? '–' : `−${num(caidaMedia)} °C`, t('vent.caida_media_sub'), 'var(--cui-info)') +
+    widget(t('vent.caida_hum_media'), caidaHumMedia == null ? '–' : `−${num(caidaHumMedia)} ${t('met.puntos')}`, t('vent.caida_hum_sub', { n: caidasHum.length }), 'var(--cui-info)') +
     Object.entries(totales).map(([sid, x]) => widget(esc(nombreDe(sid)), t('n_aperturas', { n: x.n }), minutosTexto(x.min), colorDe[sid] || '#999')).join('');
 
-  $('#v-tabla').innerHTML = `<thead><tr><th>${t('habitacion')}</th><th>${t('apertura')}</th><th>${t('cierre')}</th><th class="text-end">${t('duracion')}</th><th>${t('nota')}</th><th class="text-end">${t('acciones')}</th></tr></thead><tbody>` +
+  $('#v-tabla').innerHTML = `<thead><tr><th>${t('habitacion')}</th><th>${t('apertura')}</th><th>${t('cierre')}</th><th class="text-end">${t('duracion')}</th><th class="col-efecto" title="${esc(t('vent.efecto_ayuda'))}">${t('vent.efecto')} <i class="cil-info ms-1 text-body-secondary" role="img" tabindex="0" title="${esc(t('vent.precision'))}" aria-label="${esc(t('vent.precision'))}"></i></th><th>${t('nota')}</th><th class="text-end col-acciones">${t('acciones')}</th></tr></thead><tbody>` +
     (listaVentanas.length ? listaVentanas.map(v => `<tr>
       <td><span class="d-inline-flex align-items-center gap-2">${punto(v.sensor)}${esc(nombreDe(v.sensor))}</span></td>
       <td>${fmtFechaHora(v.inicio)}</td>
       <td>${v.fin ? fmtFechaHora(v.fin) : `<span class="badge text-bg-warning">${t('abierta_min')}</span>`}</td>
       <td class="text-end">${duracion(v.inicio, v.fin)}</td>
-      <td class="nota">${esc(v.nota)}</td>
-      <td class="text-end">
+      <td class="tabular col-efecto">${efectoVentana(v.impacto)}</td>
+      <td class="nota"><span class="nota-corta" title="${esc(v.nota)}">${esc(v.nota)}</span></td>
+      <td class="text-end col-acciones">
         ${v.fin ? '' : `<button class="btn btn-sm btn-warning" data-cerrar="${esc(v.id)}">${t('cerrar_btn')}</button>`}
         <button class="btn btn-sm btn-ghost-secondary" data-editar="${esc(v.id)}" title="${esc(t('editar'))}" aria-label="${esc(t('editar'))}"><i class="cil-pencil"></i></button>
         <button class="btn btn-sm btn-ghost-danger" data-borrar="${esc(v.id)}" title="${esc(t('borrar'))}" aria-label="${esc(t('borrar'))}"><i class="cil-trash"></i></button>
       </td></tr>`).join('')
-    : `<tr><td colspan="6" class="text-center text-body-secondary py-4">${t('sin_registros')}</td></tr>`) + '</tbody>';
+    : `<tr><td colspan="7" class="text-center text-body-secondary py-4">${t('sin_registros')}</td></tr>`) + '</tbody>';
+  paginarTabla('#v-tabla');
 }
 
 $('#v-tabla').addEventListener('click', async e => {
@@ -2148,6 +2538,7 @@ async function cargarTermostatos() {
       <td class="text-end">${duracion(r.fecha_hora, r.hasta)}</td>
       <td class="text-end text-nowrap"><button class="btn btn-sm btn-ghost-secondary" data-editar-termo="${esc(r.id)}" title="${esc(t('editar'))}" aria-label="${esc(t('editar'))}"><i class="cil-pencil"></i></button><button class="btn btn-sm btn-ghost-danger" data-borrar-termo="${esc(r.id)}" title="${esc(t('borrar'))}" aria-label="${esc(t('borrar'))}"><i class="cil-trash"></i></button></td>
     </tr>`).join('') : `<tr><td colspan="6" class="text-center text-body-secondary py-4">${t('sin_registros')}</td></tr>`) + '</tbody>';
+  paginarTabla('#tm-tabla');
 }
 $('#tm-aplicar').addEventListener('click', cargarTermostatos);
 $('#tm-tabla').addEventListener('click', async e => {
@@ -2217,7 +2608,10 @@ const hayPeriodos = () => periodos.length > 0;
 
 async function cargarMedidores() {
   let pe;
-  [todosMed, todasLecturas, pe] = await Promise.all([api('/api/medidores'), api('/api/lecturas_medidor'), api('/api/periodos')]);
+  let climaDiario;
+  [todosMed, todasLecturas, pe, climaDiario] = await Promise.all([api('/api/medidores'), api('/api/lecturas_medidor'), api('/api/periodos'),
+    api('/api/clima_diario').catch(() => [])]);
+  prepararGradosDia(climaDiario);
   periodos = pe.periodos;
   cierres = pe.cierres;
   medidores = todosMed.filter(m => !esAgua(m));
@@ -2328,6 +2722,7 @@ function renderHistorialMed() {
         <button class="btn btn-sm btn-ghost-danger py-0" data-borrar-lect="${esc(l.id)}" title="${esc(t('borrar'))}" aria-label="${esc(t('borrar'))}"><i class="cil-trash"></i></button>
       </td>
     </tr>`).join('') : `<tr><td colspan="7" class="text-center text-body-secondary py-4">${t('sin_registros')}</td></tr>`) + '</tbody>';
+  paginarTabla('#md-tabla');
 }
 
 function limpiarFormMed() {
@@ -2442,7 +2837,35 @@ tablasMed.forEach(el => el.addEventListener('click', async e => {
 // Acumulado de un medidor en cualquier instante, interpolando linealmente entre lecturas
 // (así el consumo entre dos lecturas se reparte de forma pareja en esos días).
 function serieAcum(id) {
-  return todasLecturas.filter(l => l.medidor === id).map(l => ({ x: new Date(l.fecha_hora).getTime(), a: l.acumulado }));
+  const serie = todasLecturas.filter(l => l.medidor === id).map(l => ({ x: new Date(l.fecha_hora).getTime(), a: l.acumulado }));
+  serie.segunFrio = !esAgua(medPorId(id));
+  return serie;
+}
+
+// Grados-día acumulados: un día suma lo que le falta para llegar a la temperatura base (un día cálido suma 0).
+// Entre dos lecturas, el consumo de calefacción se reparte en proporción a ellos. El agua caliente no depende del frío.
+const BASE_GRADOS_DIA = 15, DIAS_TOLERANCIA_CLIMA = 7;
+let gradosDia = null;
+function prepararGradosDia(filas) {
+  gradosDia = null;
+  if (!filas.length) return;
+  const porFecha = new Map(filas), valores = filas.map(([, temp]) => Math.max(0, BASE_GRADOS_DIA - temp));
+  const media = valores.reduce((a, b) => a + b, 0) / valores.length;
+  const ini = new Date(filas[0][0] + 'T00:00:00'), fin = new Date(filas[filas.length - 1][0] + 'T00:00:00');
+  const acum = [0];
+  for (const c = new Date(ini); c <= fin; c.setDate(c.getDate() + 1)) {
+    const temp = porFecha.get(fechaInput(c));
+    acum.push(acum[acum.length - 1] + (temp == null ? media : Math.max(0, BASE_GRADOS_DIA - temp)));
+  }
+  gradosDia = { ini: ini.getTime(), fin: fin.getTime() + DIA, acum };
+}
+function gradosHasta(x) {
+  const pos = Math.min(Math.max((x - gradosDia.ini) / DIA, 0), gradosDia.acum.length - 1), i = Math.floor(pos);
+  const sig = gradosDia.acum[Math.min(i + 1, gradosDia.acum.length - 1)];
+  return gradosDia.acum[i] + (sig - gradosDia.acum[i]) * (pos - i);
+}
+function repartePorFrio(serie, desde, hasta) {
+  return !!(serie.segunFrio && gradosDia && desde >= gradosDia.ini && hasta <= gradosDia.fin + DIAS_TOLERANCIA_CLIMA * DIA);
 }
 function acumEn(serie, x) {
   if (!serie.length || x <= serie[0].x) return 0;
@@ -2451,7 +2874,59 @@ function acumEn(serie, x) {
   let i = 0;
   while (serie[i + 1].x <= x) i++;
   const p = serie[i], q = serie[i + 1];
+  if (repartePorFrio(serie, p.x, q.x)) {
+    const gp = gradosHasta(p.x), gq = gradosHasta(q.x);
+    if (gq > gp) return p.a + (q.a - p.a) * (gradosHasta(x) - gp) / (gq - gp);
+  }
   return p.a + (q.a - p.a) * (x - p.x) / (q.x - p.x);
+}
+
+// Período de comparación: las mismas fechas un año antes. La calefacción depende de la estación, y un período en curso
+// se compara solo contra el mismo tramo del anterior.
+const unAnioAntes = x => { const f = new Date(x); f.setFullYear(f.getFullYear() - 1); return f.getTime(); };
+// Con lecturas muy separadas, el valor en una fecha intermedia no se midió: es una estimación
+const DIAS_LECTURA_CERCANA = 45;
+function fechaEstimada(s, x) {
+  const i = s.findIndex(p => p.x >= x);
+  return i > 0 && s[i].x !== x && s[i].x - s[i - 1].x > DIAS_LECTURA_CERCANA * DIA;
+}
+// Consumo de un medidor en el período anterior. 'parcial': faltan datos (empezó después, o es de antes de la mudanza).
+// 'porFrio': no hay lecturas cerca del corte y el tramo se estimó según el frío de cada día.
+// 'estimado': tampoco hay datos del clima, así que no se puede saber el mismo tramo y se da 'completo' como referencia.
+function consumoAnterior(s, d, h, hPeriodo) {
+  if (s.length < 2) return null;
+  const fin = Math.min(h, s[s.length - 1].x);
+  if (fin <= d) return null;
+  const ini = unAnioAntes(d), finAnt = unAnioAntes(fin);
+  if (finAnt <= s[0].x) return null;
+  const mudanza = estado.fecha_mudanza ? new Date(estado.fecha_mudanza + 'T00:00:00').getTime() : 0;
+  const lejos = fechaEstimada(s, ini) || fechaEstimada(s, finAnt), porFrio = lejos && repartePorFrio(s, ini, finAnt);
+  // "Total": el período de liquidación completo, aunque el filtro abarque solo una parte
+  const per = periodos.map(limitesPer).find(([a, b]) => a <= ini && ini <= b);
+  const [iniTotal, finTotal] = per || [ini, unAnioAntes(hPeriodo)];
+  return { valor: acumEn(s, finAnt) - acumEn(s, ini), hasta: finAnt, parcial: s[0].x > ini || mudanza > ini,
+           porFrio, estimado: lejos && !porFrio,
+           completo: acumEn(s, finTotal) - acumEn(s, iniTotal) };
+}
+const iconoAyuda = texto => `<i class="cil-info ms-1 text-body-secondary" role="img" tabindex="0" title="${esc(texto)}" aria-label="${esc(texto)}"></i>`;
+const filaConsumo = (etiqueta, valor) => `<div class="d-flex flex-wrap justify-content-between column-gap-2"><span class="text-nowrap">${esc(etiqueta)}</span><span class="tabular ms-auto text-end">${valor}</span></div>`;
+const ayudaProyeccion = f => f ? t('per.proy_frio', { c: fmtValor(f.consumido, 0), r: fmtValor(f.ritmo, 3), g: fmtValor(f.gradosResto, 0), p: fmtValor(f.total, 0) }) : t('per.proy_calculo');
+const htmlProyeccion = (valor, ayuda) => `<div class="small text-body-secondary mt-1">${filaConsumo(t('cons.proyeccion'), `≈ ${fmtValor(valor, 0)}${iconoAyuda(ayuda)}`)}</div>`;
+function htmlComparacion(actual, ant) {
+  const fila = filaConsumo;
+  const bloque = filas => `<div class="small text-body-secondary mt-2 pt-2 border-top"><div class="fw-semibold">${esc(t('cons.periodo_ant'))}</div>${filas}</div>`;
+  if (!ant) return bloque(fila(t('cons.total_todos'), '–'));
+  const total = sufijo => fila(t('cons.total_todos'), `${ant.parcial ? '≈ ' : ''}${fmtValor(ant.completo, 0)}${sufijo}`);
+  if (ant.estimado) return bloque(total(iconoAyuda(t('cons.estimado_ayuda'))));
+  const dif = ant.valor > 0 && !ant.parcial ? (actual - ant.valor) / ant.valor * 100 : null;
+  const clase = dif == null || Math.abs(dif) < 1 ? 'text-body-secondary' : dif > 0 ? 'text-danger' : 'text-success';
+  const aprox = ant.parcial || ant.porFrio ? '≈ ' : '';
+  const pct = dif == null ? '' : ` <span class="fw-semibold text-nowrap ${clase}">${dif > 0 ? '+' : dif < 0 ? '−' : ''}${num(Math.abs(dif), 0)} %</span>`;
+  const ayuda = ant.parcial ? 'cons.parcial' : ant.porFrio ? 'cons.frio_ayuda' : '';
+  const extra = pct + (ayuda ? iconoAyuda(t(ayuda)) : '');
+  // En un período cerrado "a la fecha" y "total" son el mismo valor: una sola fila
+  if (Math.abs(ant.completo - ant.valor) < 0.5) return bloque(total(extra));
+  return bloque(fila(t('cons.a_la_fecha'), `<span class="text-nowrap">${aprox}${fmtValor(ant.valor, 0)}</span>${extra}`) + total(''));
 }
 
 const limitesPer = p => [new Date(p.inicio + 'T00:00:00').getTime(), new Date(p.fin + 'T23:59:59').getTime()];
@@ -2475,28 +2950,40 @@ function renderConsumo() {
   const d = $('#cs-desde').value ? new Date($('#cs-desde').value + 'T00:00:00').getTime() : Date.now() - 365 * DIA;
   const h = Math.min($('#cs-hasta').value ? new Date($('#cs-hasta').value + 'T23:59:59').getTime() : Date.now(), Date.now());
   const lista = medidores.filter(m => !sel || m.id === sel);
+  const hPeriodo = $('#cs-hasta').value ? new Date($('#cs-hasta').value + 'T23:59:59').getTime() : h;
+  // La proyección al cierre solo tiene sentido si el filtro arranca al inicio del período en curso
+  const perEnCurso = periodos.map(limitesPer).find(([a, b]) => a === d && b >= Date.now());
   const datos = lista.map(m => {
     const s = serieAcum(m.id);
     const consumo = acumEn(s, h) - acumEn(s, d);
     const ini = s.length ? Math.max(d, s[0].x) : 0, fin = s.length ? Math.min(h, s[s.length - 1].x) : 0;
     const dias = s.length > 1 && fin > ini ? (fin - ini) / DIA : 0;
-    return { m, s, consumo, dias, porDia: dias ? consumo / dias : null };
+    return { m, s, consumo, dias, porDia: dias ? consumo / dias : null, anterior: consumoAnterior(s, d, h, hPeriodo),
+             proyeccion: perEnCurso ? calcularProyeccion(s, perEnCurso[0], perEnCurso[1], acumEn(s, perEnCurso[1]) - acumEn(s, perEnCurso[0]), Date.now()) : null };
   });
 
   // Resumen
-  const widget = (titulo, valor, unidad, sub1, sub2, color) => `<div class="col-6 col-lg-3"><div class="card h-100" style="border-top:3px solid ${color}">
+  const widget = (titulo, valor, unidad, sub1, sub2, color, comparacion, proyeccion = '') => `<div class="col-6 col-lg-3"><div class="card h-100" style="border-top:3px solid ${color}">
     <div class="card-body py-3"><div class="small text-body-secondary text-truncate">${titulo}</div>
     <div class="fs-4 fw-semibold tabular">${valor} <span class="fs-6 fw-normal text-body-secondary">${esc(unidad)}</span></div>
-    <div class="small text-body-secondary">${sub1}</div>${sub2 ? `<div class="small text-body-secondary">${sub2}</div>` : ''}</div></div></div>`;
+    ${sub1 ? `<div class="small text-body-secondary">${sub1}</div>` : ''}${sub2 ? `<div class="small text-body-secondary">${sub2}</div>` : ''}${proyeccion}${comparacion}</div></div></div>`;
   let html = '';
   const unidades = new Set(lista.map(unidadDe));
   if (datos.length > 1 && unidades.size === 1) {
     const total = datos.reduce((s, x) => s + x.consumo, 0);
-    html += widget(t('cons.total_todos'), fmtValor(total, 2), [...unidades][0], t('cons.periodo'), '', 'var(--cui-primary)');
+    const conAnterior = datos.filter(x => x.anterior);
+    const anteriorTotal = conAnterior.length ? { valor: conAnterior.reduce((s, x) => s + x.anterior.valor, 0),
+      completo: conAnterior.reduce((s, x) => s + x.anterior.completo, 0), estimado: conAnterior.some(x => x.anterior.estimado),
+      porFrio: conAnterior.some(x => x.anterior.porFrio),
+      parcial: conAnterior.length < datos.length || conAnterior.some(x => x.anterior.parcial) } : null;
+    html += widget(t('cons.total_todos'), fmtValor(total, 2), [...unidades][0], '', '', 'var(--cui-primary)',
+      htmlComparacion(total, anteriorTotal),
+      datos.every(x => x.proyeccion?.proy != null) ? htmlProyeccion(datos.reduce((s, x) => s + x.proyeccion.proy, 0), t('cons.proy_total_ayuda')) : '');
   }
   html += datos.map(x => widget(esc(x.m.nombre), fmtValor(x.consumo, 2), unidadDe(x.m),
-    x.porDia == null ? t('cons.periodo') : t('cons.por_dia', { v: fmtValor(x.porDia, 2) }),
-    t('cons.total', { v: fmtValor(x.m.acumulado, 2) }), colorMed[x.m.id])).join('');
+    x.porDia == null ? '' : t('cons.por_dia', { v: fmtValor(x.porDia, 2) }),
+    '', colorMed[x.m.id], htmlComparacion(x.consumo, x.anterior),
+    x.proyeccion?.proy != null ? htmlProyeccion(x.proyeccion.proy, ayudaProyeccion(x.proyeccion.frio)) : '')).join('');
   $('#cs-resumen').innerHTML = medidores.length ? html : `<div class="col-12"><div class="card"><div class="card-body text-body-secondary">${t('cons.sin_medidores')}</div></div></div>`;
 
   const css = getComputedStyle(document.documentElement);
@@ -2547,13 +3034,22 @@ function renderConsumo() {
     if (diario) c.setDate(c.getDate() + 1); else c.setMonth(c.getMonth() + 1);
     cortes.push([ini, Math.min(c.getTime(), h)]);
   }
+  const leyendaAnt = t('cons.periodo_ant') + (datos.some(x => x.anterior?.estimado || x.anterior?.porFrio) ? ` (${t('cons.estimado')})` : '');
   const etiquetas = cortes.map(([a]) => diario ? fmtDiaMes(new Date(a)) : new Date(a).toLocaleDateString(idioma, { month: 'short', year: 'numeric' }));
   graficos['graf-barras']?.destroy();
   graficos['graf-barras'] = new Chart($('#graf-barras'), {
     type: 'bar',
-    data: { labels: etiquetas, datasets: datos.map(x => ({
-      label: `${x.m.nombre} (${unidadDe(x.m)})`, backgroundColor: colorMed[x.m.id], stack: 'consumo',
-      data: cortes.map(([a, b]) => Math.max(0, acumEn(x.s, b) - acumEn(x.s, a))) })) },
+    data: { labels: etiquetas, datasets: [
+      ...datos.map(x => ({
+        label: `${x.m.nombre} (${unidadDe(x.m)})`, backgroundColor: colorMed[x.m.id], stack: 'consumo',
+        data: cortes.map(([a, b]) => Math.max(0, acumEn(x.s, b) - acumEn(x.s, a))) })),
+      // Misma columna un año antes, más clara. Se corta en la última lectura del medidor para comparar el mismo tramo.
+      ...datos.filter(x => x.anterior).map(x => {
+        const ultima = x.s[x.s.length - 1].x;
+        return { label: `${x.m.nombre} (${unidadDe(x.m)}) · ${leyendaAnt}`, backgroundColor: `${colorMed[x.m.id]}59`, stack: 'anterior', anterior: true,
+          data: cortes.map(([a, b]) => a >= ultima ? 0 : Math.max(0, acumEn(x.s, unAnioAntes(Math.min(b, ultima))) - acumEn(x.s, unAnioAntes(a)))) };
+      }),
+    ] },
     options: {
       animation: false, maintainAspectRatio: false,
       scales: {
@@ -2561,7 +3057,24 @@ function renderConsumo() {
         y: { stacked: true, beginAtZero: true, grid: { color: grid }, ticks: { color: texto, callback: v => fmtValor(v, 2) } },
       },
       plugins: {
-        legend: { labels: { color: texto, boxWidth: 12 } },
+        legend: {
+          labels: { color: texto, boxWidth: 12,
+            // Una sola entrada para todas las columnas del período anterior
+            generateLabels(chart) {
+              const items = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+              const anteriores = items.filter(i => chart.data.datasets[i.datasetIndex].anterior);
+              if (!anteriores.length) return items;
+              return [...items.filter(i => !chart.data.datasets[i.datasetIndex].anterior),
+                { ...anteriores[0], text: leyendaAnt, fillStyle: 'rgba(128,128,128,.35)', strokeStyle: 'transparent' }];
+            } },
+          onClick(e, item, leyenda) {
+            const chart = leyenda.chart, ds = chart.data.datasets[item.datasetIndex];
+            const grupo = ds.anterior ? chart.data.datasets.map((x, i) => x.anterior ? i : -1).filter(i => i >= 0) : [item.datasetIndex];
+            const visible = chart.isDatasetVisible(item.datasetIndex);
+            grupo.forEach(i => chart.setDatasetVisibility(i, !visible));
+            chart.update();
+          },
+        },
         tooltip: { callbacks: { label: it => `${it.dataset.label}: ${fmtValor(it.parsed.y, 2)}` } },
       },
     },
@@ -2583,6 +3096,7 @@ function renderConsumo() {
       <td class="text-end">${l.dias ? fmtValor(l.consumo / l.dias, 2) : '–'}</td>
       <td class="text-end">${fmtValor(l.acumulado, 2)}</td></tr>`; }).join('')
     : `<tr><td colspan="7" class="text-center text-body-secondary py-4">${t('sin_registros')}</td></tr>`) + '</tbody>';
+  paginarTabla('#cs-tabla');
 }
 $('#cs-aplicar').addEventListener('click', mostrarConsumo);
 $('#cs-periodo').addEventListener('change', () => {
@@ -2594,6 +3108,98 @@ $('#cs-periodo').addEventListener('change', () => {
 $('#cs-medidor').addEventListener('change', renderConsumo);
 
 // Consumo de cada medidor en cada período de liquidación
+// Tasa diaria (unidad/día) medida en el instante t: solo si las lecturas que lo rodean están a ≤ 62 días (si no, no se ve la estacionalidad)
+function tasaEn(serie, t) {
+  for (let i = 0; i + 1 < serie.length; i++) {
+    const p = serie[i], q = serie[i + 1];
+    if (t >= p.x && t < q.x) return q.x - p.x <= 62 * DIA ? (q.a - p.a) / ((q.x - p.x) / DIA) : null;
+  }
+  return null;
+}
+// Promedio de lo medido en esa fecha (mes/día) en todos los años con datos anteriores a `limite`
+function tasaFecha(serie, fecha, limite) {
+  const v = [];
+  for (let y = new Date(serie[0].x).getFullYear(); y <= new Date(limite).getFullYear(); y++) {
+    const t = new Date(y, fecha.getMonth(), fecha.getDate(), 12).getTime();
+    if (t >= serie[0].x && t <= limite) { const r = tasaEn(serie, t); if (r != null) v.push(r); }
+  }
+  return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null;
+}
+// Consumo esperado entre `desde` y `hasta` según la estacionalidad medida con datos anteriores a `limite`; null si casi no hay datos comparables
+function tasasEsperadas(serie, desde, hasta, limite) {
+  if (serie.length < 2) return null;
+  let total = 0, conDato = 0, dias = 0;
+  const sinDato = [];
+  for (let t = desde; t < hasta; t += DIA) {
+    const dia = new Date(Math.min(t + DIA / 2, hasta)), fraccion = Math.min(DIA, hasta - t) / DIA;
+    dias += fraccion;
+    let r = tasaFecha(serie, dia, limite);
+    if (r == null) {   // fecha simétrica respecto del 15 de enero
+      const doy = Math.round((new Date(dia.getFullYear(), dia.getMonth(), dia.getDate()) - new Date(dia.getFullYear(), 0, 1)) / DIA) + 1;
+      let esp = 30 - doy; if (esp < 1) esp += 365;
+      r = tasaFecha(serie, new Date(dia.getFullYear(), 0, esp), limite);
+    }
+    if (r == null) { sinDato.push(fraccion); continue; }
+    total += r * fraccion; conDato += fraccion;
+  }
+  if (conDato < dias * 0.6) return null;
+  return total + (sinDato.length ? total / conDato * sinDato.reduce((x, y) => x + y, 0) : 0);
+}
+
+// Proyección de calefacción al cierre: lo consumido + (consumo por grado-día de este período) × (grados-día de las mismas
+// fechas restantes, un año antes). null si hay poco frío acumulado para calcular el ritmo o falta el clima de esas fechas.
+const MIN_GRADOS_DIA_PROYECCION = 100;
+function proyeccionPorFrio(s, desde, hasta, objetivo, consumido) {
+  if (!repartePorFrio(s, desde, hasta)) return null;
+  const gradosPeriodo = gradosHasta(hasta) - gradosHasta(desde);
+  const inicioResto = unAnioAntes(hasta), finResto = unAnioAntes(objetivo);
+  if (gradosPeriodo < MIN_GRADOS_DIA_PROYECCION || inicioResto < gradosDia.ini || finResto > gradosDia.fin) return null;
+  const ritmo = consumido / gradosPeriodo, gradosResto = gradosHasta(finResto) - gradosHasta(inicioResto);
+  return { total: consumido + ritmo * gradosResto, consumido, ritmo, gradosResto };
+}
+
+function calcularProyeccion(s, ini, fin, valor, ahora) {
+  // Proyección a fin de año (31 dic; si el período termina antes, a su cierre) con estacionalidad:
+  // se suma, día por día, el consumo esperado según lo medido en esa misma fecha en otros años o, si no hay datos,
+  // en la fecha climáticamente equivalente (simétrica respecto del 15 de enero, el momento más frío).
+  // Sin datos suficientes se usa el promedio diario (sin estacionalidad).
+  let proy = null, estacional = false, frio = null;
+  const objetivo = Math.min(fin, new Date(new Date(ahora).getFullYear(), 11, 31, 23, 59, 59).getTime());
+  if (fin >= ahora && valor > 0) {
+    const desde = Math.max(ini, s[0].x), hasta = Math.min(s[s.length - 1].x, ahora);
+    frio = hasta > desde ? proyeccionPorFrio(s, desde, hasta, objetivo, valor) : null;
+    if (frio) { proy = frio.total; estacional = true; }
+    else if (hasta > desde) {
+      // Ritmo reciente (últimos ~7 días, entre lecturas reales) frente a lo habitual para esas fechas: escala lo que falta
+      let vi = s.findIndex(q => q.x >= hasta - 7 * DIA);
+      if (vi > 0 && hasta - s[vi].x < 2 * DIA) vi--;
+      const ventana = vi >= 0 && s[vi].x < hasta ? s[vi].x : hasta - 7 * DIA;
+      const futuro = tasasEsperadas(s, hasta, objetivo, ventana);
+      if (futuro != null) {
+        const habitual = tasasEsperadas(s, ventana, hasta, ventana);
+        const real = acumEn(s, hasta) - acumEn(s, ventana);
+        const k = habitual != null && habitual >= 1 ? Math.min(4, Math.max(0, real / habitual)) : 1;
+        proy = valor + futuro * k; estacional = true;
+      }
+      else proy = valor + valor / ((hasta - desde) / DIA) * Math.max(0, objetivo - hasta) / DIA;
+    }
+  }
+  return { proy, estacional, frio };
+}
+
+function filaTotalComparacion(lista, celdas, periodosComp) {
+  if (lista.length < 2 || new Set(lista.map(unidadDe)).size > 1) return '';
+  const unidad = esc(unidadDe(lista[0]));
+  return `<tr class="fw-semibold"><td>${t('cons.total_todos')}</td>` + periodosComp.map((p, j) => {
+    const fila = celdas.map(c => c[j]).filter(Boolean);
+    if (!fila.length) return '<td class="text-end text-body-secondary">–</td>';
+    const suma = fila.reduce((s, c) => s + c.valor, 0);
+    const proy = fila.some(c => c.enCurso) && fila.every(c => c.proy != null) ? fila.reduce((s, c) => s + c.proy, 0) : null;
+    return `<td class="text-end">${fmtValor(suma, 0)} <span class="small text-body-secondary fw-normal">${unidad}</span>
+      ${proy != null ? `<div class="small text-body-secondary fst-italic fw-normal">${t('per.proyeccion')}: ${fmtValor(proy, 0)}${iconoAyuda(t('cons.proy_total_ayuda'))}</div>` : ''}</td>`;
+  }).join('') + '</tr>';
+}
+
 function renderComparacion(lista, texto, grid) {
   const perConDatos = periodos.filter(p => p.inicio <= fechaInput(new Date()));
   $('#cs-comp-card').hidden = !perConDatos.length || !lista.length;
@@ -2606,7 +3212,8 @@ function renderComparacion(lista, texto, grid) {
       if (!s.length || s[s.length - 1].x < ini || s[0].x > fin) return null;   // sin datos en ese período
       const valor = acumEn(s, fin) - acumEn(s, ini);
       const incompleto = fin < ahora && s[s.length - 1].x < fin;
-      return { valor, incompleto, enCurso: fin >= ahora, parcialMudanza: !!badgePerMudanza(p) };
+      const { proy, estacional, frio } = calcularProyeccion(s, ini, fin, valor, ahora);
+      return { valor, proy, estacional, frio, incompleto, enCurso: fin >= ahora, parcialMudanza: !!badgePerMudanza(p) };
     });
   });
   const estadoPer = p => { const [ini, fin] = limitesPer(p); return badgePerMudanza(p) + (fin < ahora ? '' : ` <span class="badge text-bg-info">${t('per.estado_curso')}</span>`); };
@@ -2621,8 +3228,9 @@ function renderComparacion(lista, texto, grid) {
         return `<td class="text-end"><span class="${c.incompleto ? 'fst-italic text-body-secondary' : 'fw-semibold'}" ${c.incompleto ? `title="${esc(t('per.incompleto'))}"` : ''}>${fmtValor(c.valor, 0)}</span>
           <span class="small text-body-secondary">${esc(unidadDe(m))}</span>
           ${c.incompleto ? `<div class="small"><span class="badge text-bg-warning">${t('per.incompleto')}</span></div>` : ''}
+          ${c.proy != null ? `<div class="small text-body-secondary fst-italic">${t('per.proyeccion')}: ${fmtValor(c.proy, 0)}${c.frio ? iconoAyuda(t('per.proy_frio', { c: fmtValor(c.frio.consumido, 0), r: fmtValor(c.frio.ritmo, 3), g: fmtValor(c.frio.gradosResto, 0), p: fmtValor(c.frio.total, 0) })) : ''}${c.estacional ? '' : ` <span title="${esc(t('per.proy_lineal_ayuda'))}">(${t('per.proy_lineal')})</span>`}</div>` : ''}
           ${delta != null ? `<div class="small ${delta > 0 ? 'text-danger' : 'text-success'}">${delta > 0 ? '+' : ''}${num(delta, 0)} % ${t('per.variacion')}</div>` : ''}</td>`;
-      }).join('') + '</tr>').join('') + '</tbody>';
+      }).join('') + '</tr>').join('') + filaTotalComparacion(lista, celdas, perConDatos) + '</tbody>';
 
   // Barras agrupadas: un grupo por medidor, una barra por período
   const tonos = perConDatos.map((p, j) => 0.35 + 0.65 * (j + 1) / perConDatos.length);
@@ -2631,20 +3239,30 @@ function renderComparacion(lista, texto, grid) {
     type: 'bar',
     data: {
       labels: lista.map(m => m.nombre),
-      datasets: perConDatos.map((p, j) => ({
-        label: p.nombre, data: celdas.map(fila => fila[j] ? fila[j].valor : null),
+      datasets: perConDatos.flatMap((p, j) => [{
+        label: p.nombre, data: celdas.map(fila => fila[j] ? fila[j].valor : null), stack: p.id,
         backgroundColor: `rgba(99, 102, 241, ${tonos[j]})`, borderColor: '#6366f1', borderWidth: 1,
-      })),
+      }, {
+        // Proyección del período en curso: barra translúcida con borde punteado encima de lo consumido
+        label: `${p.nombre} (${t('per.proyeccion')})`, proyeccion: true, stack: p.id,
+        data: celdas.map(fila => fila[j] && fila[j].proy != null ? fila[j].proy - fila[j].valor : null),
+        backgroundColor: 'rgba(99, 102, 241, 0.15)', borderColor: '#6366f1', borderWidth: 1.5, borderDash: [5, 4],
+      }]),
     },
     options: {
       animation: false, maintainAspectRatio: false,
       scales: {
-        x: { grid: { display: false }, ticks: { color: texto } },
-        y: { beginAtZero: true, grid: { color: grid }, ticks: { color: texto, callback: v => fmtValor(v, 0) } },
+        x: { stacked: true, grid: { display: false }, ticks: { color: texto } },
+        y: { stacked: true, beginAtZero: true, grid: { color: grid }, ticks: { color: texto, callback: v => fmtValor(v, 0) } },
       },
       plugins: {
-        legend: { labels: { color: texto, boxWidth: 12 } },
-        tooltip: { callbacks: { label: it => `${it.dataset.label}: ${fmtValor(it.parsed.y, 0)} ${unidadDe(lista[it.dataIndex])}` } },
+        legend: { labels: { color: texto, boxWidth: 12, filter: (it, datos) => !datos.datasets[it.datasetIndex]?.proyeccion } },
+        tooltip: { callbacks: { label: it => {
+          const u = unidadDe(lista[it.dataIndex]);
+          if (!it.dataset.proyeccion) return `${it.dataset.label}: ${fmtValor(it.parsed.y, 0)} ${u}`;
+          const c = celdas[it.dataIndex][Math.floor(it.datasetIndex / 2)];
+          return `${it.dataset.label}: ${fmtValor(c.proy, 0)} ${u}`;
+        } } },
       },
     },
   });
@@ -2758,6 +3376,7 @@ function renderAgua() {
         <button class="btn btn-sm btn-ghost-secondary py-0" data-editar-lect="${esc(l.id)}" title="${esc(t('editar'))}" aria-label="${esc(t('editar'))}"><i class="cil-pencil"></i></button>
         <button class="btn btn-sm btn-ghost-danger py-0" data-borrar-lect="${esc(l.id)}" title="${esc(t('borrar'))}" aria-label="${esc(t('borrar'))}"><i class="cil-trash"></i></button>`}
       </td></tr>`; }).join('') : `<tr><td colspan="7" class="text-center text-body-secondary py-4">${t('sin_registros')}</td></tr>`) + '</tbody>';
+  paginarTabla('#ag-tabla');
 }
 
 function limpiarFormAgua() {
@@ -2825,6 +3444,7 @@ function renderPeriodos() {
           <button class="btn btn-sm btn-ghost-danger" data-borrar-per="${esc(p.id)}" title="${esc(t('borrar'))}" aria-label="${esc(t('borrar'))}"><i class="cil-trash"></i></button>
         </td></tr>`;
     }).join('') : `<tr><td colspan="6" class="text-center text-body-secondary py-4">${t('per.ninguno')}</td></tr>`) + '</tbody>';
+  paginarTabla('#pe-tabla');
   if ($('#pe-cierres-form').dataset.id) abrirCierres($('#pe-cierres-form').dataset.id);
   if ($('#pe-editando').value) { $('#pe-titulo').textContent = t('per.editar'); $('#pe-guardar').textContent = t('guardar'); }
 }
@@ -2936,22 +3556,253 @@ $('#dlg-form').addEventListener('submit', async e => {
 });
 
 // ======================================================================
+//  Métricas
+// ======================================================================
+// Unidades de calefacción proyectadas al cierre del período en curso: la misma cuenta que en Consumo. null si falta algún medidor.
+function unidadesProyectadas() {
+  const ahora = Date.now(), per = periodos.map(p => ({ id: p.id, lim: limitesPer(p) })).find(p => p.lim[0] <= ahora && ahora <= p.lim[1]);
+  if (!per || !medidores.length) return null;
+  const [ini, fin] = per.lim;
+  const proy = medidores.map(m => { const s = serieAcum(m.id); return calcularProyeccion(s, ini, fin, acumEn(s, fin) - acumEn(s, ini), ahora).proy; });
+  return proy.every(x => x != null) ? { periodo: per.id, unidades: proy.reduce((a, b) => a + b, 0) } : null;
+}
+
+let datosEnergia = null;
+
+async function cargarEnergia() {
+  const d = datosEnergia = await api('/api/energia');
+  const conDatos = d.periodos.some(p => p.kwh != null);
+  $('#mt-energia-vacio').hidden = conDatos;
+  $('#mt-energia-vacio .card-body').innerHTML = `<p class="text-body-secondary mb-0">${t('ene.vacio')} <a href="#ajustes">${t('ene.ir_ajustes')}</a></p>`;
+  $('#mt-energia-bloque').hidden = !conDatos;
+  if (!conDatos) return;
+  const proyectado = unidadesProyectadas();
+  const periodosE = d.periodos.map(p => {
+    const kwhFin = proyectado?.periodo === p.id && p.factor ? proyectado.unidades * p.factor : null;
+    return { ...p, kwhFin, costoFin: kwhFin != null && p.precio ? kwhFin * p.precio : null };
+  });
+  renderKpiEnergia(periodosE);
+  renderAnual(periodosE, d.es_departamento);
+  const conKwh = periodosE.filter(p => p.kwh != null);
+  const previo = $('#mt-sala-periodo').value;
+  $('#mt-sala-periodo').innerHTML = conKwh.slice().reverse().map(p => `<option value="${esc(p.id)}">${esc(p.nombre)}</option>`).join('');
+  // Por defecto el período en curso; si ya se eligió otro, se respeta al refrescar
+  $('#mt-sala-periodo').value = conKwh.some(p => p.id === previo) ? previo : (conKwh.find(p => p.en_curso) || conKwh[conKwh.length - 1]).id;
+  renderSalas();
+}
+
+// Último período cerrado y completo: la base justa para comparar
+const periodoReferencia = periodos => periodos.filter(p => p.kwh != null && !p.en_curso && !p.parcial_mudanza).pop();
+const fmtN = (v, dec = 0) => v == null ? '–' : fmtValor(v, dec);
+const fmtPct = v => `${v > 0 ? '+' : v < 0 ? '−' : ''}${num(Math.abs(v), 0)} %`;
+
+function renderKpiEnergia(periodos) {
+  const ref = periodoReferencia(periodos), actual = periodos.find(p => p.en_curso);
+  const kpi = (titulo, valor, unidad, sub, color) => `<div class="col-6 col-lg-3"><div class="card h-100" style="border-top:3px solid ${color}">
+    <div class="card-body py-3"><div class="small text-body-secondary">${esc(titulo)}</div>
+    <div class="fs-4 fw-semibold tabular">${valor} <span class="fs-6 fw-normal text-body-secondary">${esc(unidad)}</span></div>
+    <div class="small text-body-secondary">${sub}</div></div></div></div>`;
+  let html = '';
+  if (ref) {
+    const dif = ref.edificio?.diferencia;
+    html += kpi(t('ene.kpi_intensidad', { p: ref.nombre }), fmtN(ref.kwh_m2, 1), 'kWh/m²', dif == null ? '&nbsp;' : `<span class="fw-semibold ${dif > 0 ? 'text-danger' : 'text-success'}">${fmtPct(dif)}</span> ${t('ene.vs_edificio')}`, 'var(--cui-primary)');
+    html += kpi(t('ene.kpi_costo', { p: ref.nombre }), fmtN(ref.costo), '€', ref.pagado == null ? '&nbsp;' : t('ene.pagado_val', { v: fmtN(ref.pagado, 2) }), 'var(--cui-primary)');
+  }
+  if (actual) {
+    html += kpi(t('ene.kpi_actual', { p: actual.nombre }), `≈ ${fmtN(actual.kwh)}`, 'kWh', actual.costo == null ? '&nbsp;' : `≈ ${fmtN(actual.costo)} €`, 'var(--cui-warning)');
+    if (actual.kwhFin != null) {
+      const dif = ref?.costo && actual.costoFin != null ? (actual.costoFin - ref.costo) / ref.costo * 100 : null;
+      html += kpi(t('ene.kpi_fin', { p: actual.nombre }), actual.costoFin != null ? `≈ ${fmtN(actual.costoFin)}` : `≈ ${fmtN(actual.kwhFin)}`, actual.costoFin != null ? '€' : 'kWh',
+        `≈ ${fmtN(actual.kwhFin)} kWh${dif == null ? '' : ` · <span class="fw-semibold ${dif > 0 ? 'text-danger' : 'text-success'}">${fmtPct(dif)}</span> vs. ${esc(ref.nombre)}`}${iconoAyuda(t('ene.proyeccion_ayuda'))}`, 'var(--cui-warning)');
+    }
+  }
+  $('#mt-kpi-energia').innerHTML = html;
+}
+
+// Una fila por período, para que soporte muchos años; cada vista muestra pocas columnas para poder compararlas
+let vistaAnual = 'consumo', periodosAnual = [], hayEdificio = false;
+function renderAnual(cronologicos, esDpto) {
+  periodosAnual = cronologicos.slice().reverse();   // el más reciente primero: es el que se evalúa
+  hayEdificio = esDpto && cronologicos.some(p => p.edificio);
+  renderVistaAnual();
+}
+
+function renderVistaAnual() {
+  if (vistaAnual === 'edificio' && !hayEdificio) vistaAnual = 'consumo';
+  document.querySelectorAll('#mt-anual-vista button').forEach(b => {
+    b.classList.toggle('active', b.dataset.vista === vistaAnual);
+    if (b.dataset.vista === 'edificio') b.hidden = !hayEdificio;
+  });
+  const estimados = periodosAnual.some(p => p.estimado);
+  const aprox = (p, v, dec) => v == null ? '–' : (p.estimado ? '≈ ' : '') + fmtN(v, dec);
+  const conPrecio = (p, v) => v == null ? '–' : (p.estimado || p.precio_estimado ? '≈ ' : '') + fmtN(v);
+  const vs = v => v == null ? '–' : `<span class="fw-semibold ${v > 0 ? 'text-danger' : 'text-success'}">${fmtPct(v)}</span>`;
+  const columnas = {
+    consumo: [['ene.kwh', '', p => aprox(p, p.kwh)], ['ene.kwh_m2', '', p => `<strong>${aprox(p, p.kwh_m2, 1)}</strong>`], ['ene.w_m2', 'ene.w_m2_ayuda', p => aprox(p, p.w_m2, 1)],
+      ['ene.unidades', '', p => fmtN(p.unidades)], ['ene.factor', estimados ? 'ene.factor_medio_ayuda' : 'ene.factor_ayuda', p => aprox(p, p.factor, 3)]],
+    costos: [['ene.precio', 'ene.precio_ayuda', p => p.precio == null ? '–' : (p.precio_estimado ? '≈ ' : '') + fmtN(p.precio, 3)], ['ene.costo', 'ene.costo_ayuda', p => `<strong>${conPrecio(p, p.costo)}</strong>`],
+      ['ene.pagado', 'ene.pagado_ayuda', p => fmtN(p.pagado, 2)], ['ene.proy_kwh', 'ene.proyeccion_ayuda', p => p.kwhFin == null ? '–' : `≈ ${fmtN(p.kwhFin)}`], ['ene.proy_costo', '', p => p.costoFin == null ? '–' : `<strong>≈ ${fmtN(p.costoFin)}</strong>`]],
+    edificio: [['ene.kwh_edificio', '', p => fmtN(p.edificio?.kwh)], ['ene.kwh_m2_edificio', '', p => fmtN(p.edificio?.kwh_m2, 1)], ['ene.kwh_m2_vivienda', '', p => aprox(p, p.kwh_m2, 1)], ['ene.vs_edificio', 'ene.vs_edificio_ayuda', p => vs(p.edificio?.diferencia)]],
+  }[vistaAnual];
+  const filas = vistaAnual === 'edificio' ? periodosAnual.filter(p => p.edificio) : periodosAnual;
+  const estadoPer = p => p.en_curso ? ` <span class="badge text-bg-info fw-normal">${t('per.estado_curso')}</span>`
+    : p.parcial_mudanza ? ` <span class="badge text-bg-light border fw-normal">${t('mud.desde')}</span>` : '';
+  $('#mt-anual').innerHTML = `<thead><tr><th>${t('per.periodo')}</th>${columnas.map(([clave, ayuda]) => `<th class="text-end">${esc(t(clave))}${ayuda ? iconoAyuda(t(ayuda)) : ''}</th>`).join('')}</tr></thead><tbody>` +
+    filas.map(p => `<tr><td>${esc(p.nombre)}${estadoPer(p)}</td>${columnas.map(([, , valor]) => `<td class="text-end">${valor(p)}</td>`).join('')}</tr>`).join('') + '</tbody>';
+  paginarTabla('#mt-anual');
+}
+$('#mt-anual-vista').addEventListener('click', e => {
+  const b = e.target.closest('button[data-vista]');
+  if (b) { vistaAnual = b.dataset.vista; delete paginaActual['mt-anual']; renderVistaAnual(); }
+});
+
+function renderSalas() {
+  const d = datosEnergia, p = d?.periodos.find(x => x.id === $('#mt-sala-periodo').value);
+  if (!p) return;
+  const aprox = p.estimado ? '≈ ' : '';
+  const total = d.medidores.reduce((s, m) => s + (p.por_medidor[m.id]?.kwh || 0), 0);
+  const filas = d.medidores.map(m => ({ m, x: p.por_medidor[m.id] || {} })).sort((a, b) => (b.x.kwh_m2 ?? -1) - (a.x.kwh_m2 ?? -1));
+  $('#mt-salas').innerHTML = `<thead><tr><th>${t('med.medidor')}</th><th class="text-end">m²</th><th class="text-end">${t('ene.kwh')}</th><th class="text-end">${t('ene.kwh_m2')}</th><th style="width:30%">${t('ene.participacion')}</th></tr></thead><tbody>` +
+    filas.map(({ m, x }) => {
+      const parte = total && x.kwh != null ? x.kwh / total * 100 : null;
+      return `<tr><td><span class="d-inline-flex align-items-center gap-2">${puntoMed(m.id)}${esc(m.nombre)}</span></td><td class="text-end">${fmtN(m.m2, 1)}</td>
+        <td class="text-end">${x.kwh == null ? '–' : aprox + fmtN(x.kwh)}</td><td class="text-end fw-semibold">${x.kwh_m2 == null ? '–' : aprox + fmtN(x.kwh_m2, 1)}</td>
+        <td>${parte == null ? '–' : `<div class="d-flex align-items-center gap-2"><div class="progress flex-grow-1" style="height:6px"><div class="progress-bar" style="width:${parte.toFixed(1)}%;background:${colorMed[m.id] || '#999'}"></div></div><span class="small text-nowrap" style="min-width:3.2em;text-align:right">${num(parte, 0)} %</span></div>`}</td></tr>`;
+    }).join('') + '</tbody>';
+}
+$('#mt-sala-periodo').addEventListener('change', renderSalas);
+
+async function cargarMetricas() {
+  let d;
+  try { await cargarMedidores(); cargarEnergia().catch(err => aviso(err.message)); d = await api('/api/metricas'); } catch (err) { return aviso(err.message); }
+  const valor = (v, unidad = '') => v == null ? '–' : `${num(v)}${unidad}`;
+  const con = (v, signo = '') => v == null ? '–' : `${v ? signo : ''}${num(Math.abs(v))}`;
+  const widget = (titulo, v, unidad, sub, color, ayuda) => `<div class="col-6 col-lg-3"><div class="card h-100" style="border-top:3px solid ${color}">
+    <div class="card-body py-3"><div class="small text-body-secondary">${esc(titulo)}${iconoAyuda(ayuda)}</div>
+    <div class="fs-4 fw-semibold tabular">${v} <span class="fs-6 fw-normal text-body-secondary">${esc(unidad)}</span></div>
+    <div class="small text-body-secondary">${esc(sub)}</div></div></div></div>`;
+  const c = d.casa;
+  $('#mt-resumen').innerHTML =
+    widget(t('met.pierde'), con(c.hum_caida, '−'), t('met.puntos'), t('met.n_aperturas', { n: c.n_hum }), 'var(--cui-info)', t('met.pierde_ayuda')) +
+    widget(t('met.recupera'), con(c.hum_recupera, '+'), t('met.puntos_h'), t('met.n_aperturas', { n: c.n_hum_recupera }), 'var(--cui-info)', t('met.recupera_ayuda')) +
+    widget(t('met.enfria'), con(c.temp_caida, '−'), '°C', t('met.n_aperturas', { n: c.n_temp }), 'var(--cui-warning)', t('met.enfria_ayuda')) +
+    widget(t('met.noche'), c.noche_caida == null ? '–' : `${c.noche_caida > 0 ? '−' : '+'}${num(Math.abs(c.noche_caida))}`, '°C', t('met.n_noches', { n: c.n_noches }), 'var(--cui-warning)', t('met.noche_ayuda'));
+  const encabezado = col => `<th class="text-end">${esc(t(col[0]))}${col[1] ? iconoAyuda(t(col[1])) : ''}</th>`;
+  const sala = s => `<td><span class="d-inline-flex align-items-center gap-2">${punto(s.sensor)}${esc(nombreDe(s.sensor))}</span></td>`;
+  const vacio = n => `<tr><td colspan="${n}" class="text-center text-body-secondary py-4">${t('sin_datos')}</td></tr>`;
+  const conDatos = clave => d.sensores.filter(s => s[clave] > 0);
+  $('#mt-humedad').innerHTML = `<thead><tr><th>${t('habitacion')}</th>${[['met.col_aperturas'], ['met.col_pierde', 'met.pierde_ayuda'], ['met.col_velocidad', 'met.velocidad_ayuda'], ['met.col_recupera', 'met.recupera_ayuda']].map(encabezado).join('')}</tr></thead><tbody>` +
+    (conDatos('n_hum').map(s => `<tr>${sala(s)}<td class="text-end">${entero(s.n_hum)}</td><td class="text-end">${con(s.hum_caida, '−')}</td>
+      <td class="text-end">${valor(s.hum_por_min)}</td><td class="text-end">${con(s.hum_recupera, '+')} <span class="small text-body-secondary">(${entero(s.n_hum_recupera)})</span></td></tr>`).join('') || vacio(5)) + '</tbody>';
+  $('#mt-temperatura').innerHTML = `<thead><tr><th>${t('habitacion')}</th>${[['met.col_aperturas'], ['met.col_enfria', 'met.enfria_ayuda'], ['met.col_temp_recupera', 'met.temp_recupera_ayuda'], ['met.col_noches'], ['met.col_noche', 'met.noche_ayuda'], ['met.col_afuera']].map(encabezado).join('')}</tr></thead><tbody>` +
+    (d.sensores.filter(s => s.n_temp > 0 || s.n_noches > 0).map(s => `<tr>${sala(s)}<td class="text-end">${entero(s.n_temp)}</td><td class="text-end">${con(s.temp_caida, '−')}</td>
+      <td class="text-end">${s.temp_recupera == null ? '–' : `${s.temp_recupera >= 0 ? '+' : '−'}${num(Math.abs(s.temp_recupera))}`}</td><td class="text-end">${entero(s.n_noches)}</td>
+      <td class="text-end">${s.noche_caida == null ? '–' : `${s.noche_caida > 0 ? '−' : '+'}${num(Math.abs(s.noche_caida))}`}</td><td class="text-end">${valor(s.noche_afuera, ' °C')}</td></tr>`).join('') || vacio(7)) + '</tbody>';
+}
+
+// ======================================================================
 //  Ajustes
 // ======================================================================
+// Niveles de señal (linkquality de 0 a 255): verde desde 100, amarillo desde 40, rojo por debajo
+function iconoSenal(lq) {
+  if (lq == null) return '–';
+  const barras = lq >= 150 ? 4 : lq >= 100 ? 3 : lq >= 60 ? 2 : lq >= 30 ? 1 : 0;
+  const color = lq >= 100 ? 'text-success' : lq >= 40 ? 'text-warning' : 'text-danger';
+  return `<span class="tabular text-nowrap"><i class="cil-wifi-signal-${barras} ${color} me-1"></i>${entero(lq)}</span>`;
+}
+
+function renderSenales() {
+  const insignia = { online: ['success', 'sen.conectado'] };
+  const zigbee = estado.sensores.filter(s => !s.manual);
+  $('#a-senales').innerHTML = zigbee.length ? zigbee.map(s => {
+    const [color, texto] = insignia[s.conexion] || ['secondary', 'sen.desconocido'];
+    const ultima = s.corte?.ultima_lectura || s.ultima_lectura;
+    return `<tr>
+      <td class="text-nowrap">${punto(s.id)} ${esc(nombreDe(s.id))}</td>
+      <td>${s.conexion === 'offline' ? insigniaSinSenal() : `<span class="badge text-bg-${color}">${t(texto)}</span>`}</td>
+      <td>${iconoSenal(s.corte?.linkquality ?? s.linkquality)}</td>
+      <td class="tabular d-none d-md-table-cell">${s.bateria != null ? `${entero(s.bateria)} %` : '–'}</td>
+      <td class="small text-nowrap" title="${esc(fmtFechaHora(ultima))}">${ultima ? hace(ultima) : '–'}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="5" class="text-body-secondary">${t('aj.no_sensores')}</td></tr>`;
+}
+
+async function cargarCortes() {
+  const cortes = await api('/api/cortes');
+  $('#a-cortes').innerHTML = cortes.length ? cortes.map(c => {
+    const inicio = c.ultima_lectura || c.desde;
+    return `<tr>
+      <td class="text-nowrap">${punto(c.sensor)} ${esc(nombreDe(c.sensor))}</td>
+      <td class="small text-nowrap tabular">${esc(fmtFechaHora(c.ultima_lectura)) || '–'}</td>
+      <td class="small text-nowrap tabular">${esc(fmtFechaHora(c.desde))}</td>
+      <td class="small text-nowrap tabular">${c.hasta ? esc(fmtFechaHora(c.hasta)) : `<span class="text-danger">${t('sen.sigue')}</span>`}</td>
+      <td class="small text-nowrap">${duracion(inicio, c.hasta)}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="5" class="text-body-secondary">${t('sen.sin_cortes')}</td></tr>`;
+  paginarTabla('#a-cortes');
+}
+
+async function cargarVivienda() {
+  const d = await api('/api/vivienda');
+  const v = d.vivienda, valor = x => x == null ? '' : x;
+  $('#v-es-dpto').checked = v.es_departamento;
+  $('#v-m2-total').value = valor(v.m2_total);
+  $('#v-m2-edificio').value = valor(v.m2_edificio);
+  $('#v-m2-medidores').innerHTML = d.medidores.length ? d.medidores.map(m => `<div class="col-6 col-md-3"><label class="form-label small">${esc(m.nombre)}
+      <div class="input-group input-group-sm"><input type="number" class="form-control" min="0" step="0.1" data-m2="${esc(m.id)}" value="${esc(valor(v.m2_medidores[m.id]))}"><span class="input-group-text">m²</span></div></label></div>`).join('')
+    : `<div class="col-12 text-body-secondary small">${t('cons.sin_medidores')}</div>`;
+  const campo = (p, c, clase = '') => `<td class="${clase}"><input type="number" class="form-control form-control-sm text-end" min="0" step="any" data-periodo="${esc(p.id)}" data-campo="${c}" value="${esc(valor(d.facturas[p.id]?.[c]))}" aria-label="${esc(`${p.nombre} ${t('viv.' + c)}`)}"></td>`;
+  $('#v-facturas').innerHTML = `<thead><tr><th>${t('per.periodo')}</th><th class="text-end">${t('viv.kwh_vivienda')}</th><th class="text-end">${t('viv.unidades_vivienda')}</th><th class="text-end solo-dpto">${t('viv.kwh_edificio')}</th><th class="text-end solo-dpto">${t('viv.unidades_edificio')}</th><th class="text-end">${t('viv.precio_kwh')}</th><th class="text-end">${t('viv.pagado')}</th></tr></thead><tbody>` +
+    d.periodos.slice().reverse().map(p => `<tr><td>${esc(p.nombre)}</td>${campo(p, 'kwh_vivienda')}${campo(p, 'unidades_vivienda')}${campo(p, 'kwh_edificio', 'solo-dpto')}${campo(p, 'unidades_edificio', 'solo-dpto')}${campo(p, 'precio_kwh')}${campo(p, 'pagado')}</tr>`).join('') + '</tbody>';
+  mostrarCamposDpto();
+}
+function mostrarCamposDpto() {
+  $('#v-m2-total-titulo').textContent = t($('#v-es-dpto').checked ? 'viv.m2_dpto' : 'viv.m2_casa');
+  document.querySelectorAll('#tab-ajustes .solo-dpto').forEach(el => { el.hidden = !$('#v-es-dpto').checked; });
+}
+$('#v-es-dpto').addEventListener('change', mostrarCamposDpto);
+$('#v-guardar').addEventListener('click', async () => {
+  const facturas = {}, m2_medidores = {};
+  document.querySelectorAll('#v-facturas input').forEach(i => { (facturas[i.dataset.periodo] ??= {})[i.dataset.campo] = i.value; });
+  document.querySelectorAll('#v-m2-medidores input').forEach(i => { m2_medidores[i.dataset.m2] = i.value; });
+  try {
+    await api('/api/vivienda', { method: 'PUT', body: { es_departamento: $('#v-es-dpto').checked, m2_total: $('#v-m2-total').value, m2_edificio: $('#v-m2-edificio').value, m2_medidores, facturas } });
+    aviso(t('aj.guardados'), 'success');
+  } catch (err) { aviso(err.message); }
+});
+
+function renderSensoresAjustes() {
+  renderSenales();
+  cargarCortes().catch(() => {});
+}
+
 function renderAjustes() {
+  renderSensoresAjustes();
+  cargarVivienda().catch(err => aviso(err.message));
   $('#a-habitaciones').innerHTML = estado.sensores.length ? estado.sensores.map(s => `<div class="mb-3">
       <div class="input-group">
         <span class="input-group-text">${punto(s.id)}</span>
         <input class="form-control" data-id="${esc(s.id)}" value="${esc(s.nombre_configurado)}" placeholder="${esc(t('sensor'))} ${esc(s.id.slice(-4))}" maxlength="40" aria-label="${esc(s.id)}">
       </div>
-      <div class="form-text tabular">${esc(s.id)} · ${num(s.temperatura)} °C · ${s.ultima_lectura ? t('aj.ultima', { h: hace(s.ultima_lectura) }) : t('aj.sin_lecturas')}</div>
+      <div class="form-text tabular">${esc(s.id)} · ${num(s.temperatura)} °C · ${s.ultima_lectura ? t('aj.ultima', { h: hace(s.ultima_lectura) }) : t('aj.sin_lecturas')}
+        ${s.manual ? '' : `· <a href="#" data-a-manual="${esc(s.id)}">${t('manual.pasar_manual')}</a>`}
+        ${s.manual && estado.sensores.some(x => !x.manual) ? `<select class="form-select form-select-sm mt-1" data-destino="${esc(s.id)}" aria-label="${esc(t('manual.vincular'))}">
+          <option value="">${esc(t('manual.vincular'))}…</option>
+          ${estado.sensores.filter(x => !x.manual).map(x => `<option value="${esc(x.id)}">${esc(x.nombre_configurado || x.id)} (${esc(x.id.slice(-4))})</option>`).join('')}
+        </select>` : ''}</div>
     </div>`).join('') : `<p class="text-body-secondary">${t('aj.no_sensores')}</p>`;
   const ms = manuales();
-  $('#a-manuales').innerHTML = ms.length ? ms.map(s => `<li class="list-group-item d-flex align-items-center gap-2">
+  const autos = estado.sensores.filter(x => !x.manual);
+  $('#a-manuales').innerHTML = ms.length ? ms.map(s => `<li class="list-group-item d-flex align-items-center gap-2 flex-wrap">
       ${punto(s.id)}<span class="flex-grow-1 text-truncate">${esc(nombreDe(s.id))}</span>
+      ${autos.length ? `<select class="form-select form-select-sm w-auto" data-destino="${esc(s.id)}" aria-label="${esc(t('manual.vincular'))}">
+        <option value="">${esc(t('manual.vincular'))}…</option>
+        ${autos.map(x => `<option value="${esc(x.id)}">${esc(x.nombre_configurado || x.id)} (${esc(x.id.slice(-4))})</option>`).join('')}
+      </select>` : ''}
       <button class="btn btn-sm btn-ghost-danger" data-borrar-manual="${esc(s.id)}" title="${esc(t('borrar'))}" aria-label="${esc(t('borrar'))}"><i class="cil-trash"></i></button>
     </li>`).join('') : `<li class="list-group-item small text-body-secondary">${t('manual.ninguno')}</li>`;
   $('#a-intervalo').value = estado.intervalo_minutos;
+  $('#a-vivo').value = estado.segundos_vivo;
   $('#a-mudanza').value = estado.fecha_mudanza || '';
   $('#a-temp-min').value = estado.temp_ref?.min ?? 18;
   $('#a-temp-max').value = estado.temp_ref?.max ?? 22;
@@ -3006,12 +3857,41 @@ $('#a-manuales').addEventListener('click', async e => {
     aviso(t('manual.borrado'), 'success');
   } catch (err) { aviso(err.message); }
 });
+const vincularManual = async e => {
+  const sel = e.target.closest('[data-destino]');
+  if (!sel || !sel.value) return;
+  const origen = sel.dataset.destino, destino = sel.value;
+  if (!await confirmar(t('manual.confirmar_vincular', { n: nombreDe(origen), d: destino }))) { sel.value = ''; return; }
+  try {
+    await api(`/api/sensores_manuales/${origen}/automatico`, { method: 'POST', body: { destino } });
+    await cargarEstado();
+    renderAjustes();
+    tempCargadas = false;
+    aviso(t('manual.vinculado'), 'success');
+  } catch (err) { aviso(err.message); }
+};
+$('#a-manuales').addEventListener('change', vincularManual);
+$('#a-habitaciones').addEventListener('change', vincularManual);
+$('#a-habitaciones').addEventListener('click', async e => {
+  const a = e.target.closest('[data-a-manual]');
+  if (!a) return;
+  e.preventDefault();
+  const id = a.dataset.aManual;
+  if (!await confirmar(t('manual.confirmar_pasar', { n: nombreDe(id) }))) return;
+  try {
+    await api(`/api/sensores_manuales/convertir/${id}`, { method: 'POST' });
+    await cargarEstado();
+    renderAjustes();
+    tempCargadas = false;
+    aviso(t('manual.pasado'), 'success');
+  } catch (err) { aviso(err.message); }
+});
 $('#a-buscar').addEventListener('keydown', e => { if (e.key === 'Enter') buscarUbicacion(); });
 
 $('#a-guardar').addEventListener('click', async () => {
   const habitaciones = {};
   document.querySelectorAll('#a-habitaciones input').forEach(i => { if (i.value.trim()) habitaciones[i.dataset.id] = i.value.trim(); });
-  const body = { habitaciones, intervalo_minutos: Number($('#a-intervalo').value),
+  const body = { habitaciones, intervalo_minutos: Number($('#a-intervalo').value), segundos_vivo: Number($('#a-vivo').value),
                  humedad_ref: { min: Number($('#a-hum-min').value), max: Number($('#a-hum-max').value) },
                  temp_ref: { min: Number($('#a-temp-min').value), max: Number($('#a-temp-max').value) },
                  fecha_mudanza: $('#a-mudanza').value };
@@ -3056,7 +3936,9 @@ async function refrescar() {
   $('#ag-desde').value = fechaInput(new Date(Date.now() - 29 * DIA));
   try { await cargarEstado(); } catch (err) { aviso(err.message); }
   mostrarTab();
-  setInterval(() => { if (!document.hidden && !document.querySelector('.modal.show')) cargarEstado().catch(() => {}); }, 30000);
+  programarVivo();
+  setInterval(() => { if (!document.hidden) actualizarTiemposVivos(); }, 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) actualizarTiemposVivos(); });
   setInterval(() => { if (!document.hidden && tabActual() === 'panel') cargarGraficoPanel().catch(() => {}); }, 5 * 60000);
 })();
 </script>

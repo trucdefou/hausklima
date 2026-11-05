@@ -15,11 +15,13 @@ import json
 import os
 import secrets
 import sqlite3
+import statistics
 import threading
 import time
 import urllib.parse
 import urllib.request
 import uuid
+import zipfile
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 
@@ -42,23 +44,32 @@ RUTA_DB = os.path.join(DATOS, "clima.db")
 COL_TEMP = ["fecha_hora", "sensor", "temperatura", "humedad", "bateria", "linkquality", "ultima_lectura"]
 COL_VENT = ["id", "sensor", "inicio", "fin", "nota"]
 AFUERA = "afuera"
+# Una lectura más vieja no se guarda: el sensor no está transmitiendo. Igual a availability.passive.timeout de Zigbee2MQTT.
+MINUTOS_LECTURA_VALIDA = 120
 CONFIG_DEFECTO = {
     "ubicacion": {"nombre": "Wiesbaden, Hessen, Deutschland", "lat": 50.0826, "lon": 8.24,
                   "nombres": {"es": "Wiesbaden, Hessen, Alemania", "en": "Wiesbaden, Hesse, Germany",
                               "de": "Wiesbaden, Hessen, Deutschland"}},
     "habitaciones": {},
     "intervalo_minutos": 5,
+    "segundos_vivo": 10,    # cada cuánto consulta el navegador si hay datos nuevos (no afecta lo que se guarda)
     "sensores_manuales": [],   # ids de sensores cuyos registros se cargan a mano (p. ej. "manual_1a2b3c4d")
     # rangos recomendados, se dibujan como referencia en el gráfico de cada magnitud
     "humedad_ref": {"min": 40, "max": 60},
     "temp_ref": {"min": 18, "max": 22},
     "fecha_mudanza": "",    # AAAA-MM-DD: lo consumido antes de esta fecha era del inquilino anterior
+    # m2_medidores: superficie por medidor de calefacción; m2_edificio solo se usa si es_departamento
+    "vivienda": {"es_departamento": False, "m2_total": None, "m2_edificio": None, "m2_medidores": {}},
 }
+SEGUNDOS_VIVO = (3, 300)
 LIMITES_REF = {"humedad_ref": (0, 100, "err.humedad_ref"), "temp_ref": (-10, 40, "err.temp_ref")}
 
 lock = threading.RLock()
 ultimas = {}           # friendly_name -> última lectura
 ieee_por_nombre = {}   # friendly_name -> ieee_address
+conexion_sensores = {}   # ieee_address -> "online" / "offline" (availability de Zigbee2MQTT)
+conexion_pendiente = {}  # friendly_name -> estado recibido antes de conocer su dirección IEEE
+version_vivo = 0         # sube con cada dato nuevo; el navegador la consulta para saber cuándo actualizar
 afuera = {}
 refrescar_clima = threading.Event()
 cambio_intervalo = threading.Event()
@@ -165,13 +176,34 @@ def idioma_pedido():
 def on_connect(client, userdata, flags, reason_code, properties):
     print(f"Conectado a MQTT ({reason_code})", flush=True)
     client.subscribe(f"{BASE_TOPIC}/+")
+    client.subscribe(f"{BASE_TOPIC}/+/availability")
     client.subscribe(f"{BASE_TOPIC}/bridge/devices")
+
+
+def hora_de_lectura(datos):
+    """Hora en que Zigbee2MQTT recibió la lectura (last_seen). Sin ella, los mensajes retenidos y los
+    republicados parecerían recién llegados aunque el sensor lleve horas sin transmitir."""
+    try:
+        return datetime.fromisoformat(datos["last_seen"]).replace(tzinfo=None, microsecond=0).isoformat(timespec="seconds")
+    except (KeyError, TypeError, ValueError):
+        return ahora()
+
+
+def marcar_cambio():
+    global version_vivo
+    with lock:
+        version_vivo += 1
 
 
 def on_message(client, userdata, msg):
     try:
         datos = json.loads(msg.payload)
     except ValueError:
+        return
+    if msg.topic.endswith("/availability"):
+        nombre = msg.topic[len(BASE_TOPIC) + 1:-len("/availability")]
+        if nombre != "bridge" and isinstance(datos, dict) and datos.get("state") in ("online", "offline"):
+            actualizar_conexion(nombre, datos["state"])
         return
     if msg.topic == f"{BASE_TOPIC}/bridge/devices":
         if not isinstance(datos, list):
@@ -184,6 +216,11 @@ def on_message(client, userdata, msg):
             for nombre in list(ultimas):
                 if nombre not in ieee_por_nombre:
                     del ultimas[nombre]
+            pendientes = dict(conexion_pendiente)
+            conexion_pendiente.clear()
+        for nombre, estado in pendientes.items():
+            actualizar_conexion(nombre, estado)
+        cerrar_cortes_de_eliminados()
         return
     nombre = msg.topic[len(BASE_TOPIC) + 1:]
     if nombre == "bridge" or not isinstance(datos, dict) or "temperature" not in datos:
@@ -196,14 +233,62 @@ def on_message(client, userdata, msg):
             "humedad": datos.get("humidity"),
             "bateria": datos.get("battery"),
             "linkquality": datos.get("linkquality"),
-            "ultima_lectura": ahora(),
+            "ultima_lectura": hora_de_lectura(datos),
         }
+    marcar_cambio()
 
 
 def lecturas_actuales():
     """Últimas lecturas indexadas por dirección IEEE (estable aunque se renombre en Zigbee2MQTT)."""
     with lock:
         return {ieee_por_nombre.get(n, n): dict(v) for n, v in ultimas.items()}
+
+
+def actualizar_conexion(nombre, estado):
+    """Abre un corte cuando el sensor pasa a offline y lo cierra cuando vuelve a online.
+
+    Es idempotente: el estado retenido que llega al reiniciar el panel no duplica cortes."""
+    with lock:
+        ieee = ieee_por_nombre.get(nombre)
+        if ieee is None:
+            conexion_pendiente[nombre] = estado
+            return
+        conexion_sensores[ieee] = estado
+        lectura = ultimas.get(nombre, {})
+    marcar_cambio()
+    try:
+        with conexion() as con:
+            abierto = con.execute("SELECT 1 FROM cortes_sensor WHERE sensor = ? AND hasta IS NULL", (ieee,)).fetchone()
+            if estado == "offline" and abierto is None:
+                previa = con.execute("SELECT ultima_lectura, linkquality FROM lecturas WHERE sensor = ? "
+                                     "AND ultima_lectura IS NOT NULL ORDER BY fecha_hora DESC LIMIT 1", (ieee,)).fetchone()
+                ultima = lectura.get("ultima_lectura") or (previa and previa["ultima_lectura"])
+                con.execute("INSERT INTO cortes_sensor (id, sensor, desde, ultima_lectura, linkquality) VALUES (?, ?, ?, ?, ?)",
+                            (uuid.uuid4().hex[:12], ieee, ahora(), ultima,
+                             lectura.get("linkquality") or (previa and previa["linkquality"])))
+                # Hasta detectar el corte se fue guardando el último valor con hora nueva: esas copias no son mediciones.
+                # La primera fila de esa lectura sí es el dato real y se conserva.
+                con.execute("DELETE FROM lecturas WHERE sensor = ? AND ultima_lectura = ? AND fecha_hora > "
+                            "(SELECT MIN(fecha_hora) FROM lecturas WHERE sensor = ? AND ultima_lectura = ?)",
+                            (ieee, ultima, ieee, ultima))
+            elif estado == "online" and abierto is not None:
+                con.execute("UPDATE cortes_sensor SET hasta = ? WHERE sensor = ? AND hasta IS NULL", (ahora(), ieee))
+    except sqlite3.Error as e:  # un error de la base no debe cortar el hilo de MQTT
+        print(f"Error registrando el corte de {nombre}: {e}", flush=True)
+
+
+def cerrar_cortes_de_eliminados():
+    """Un dispositivo eliminado de Zigbee2MQTT ya no enviará 'online': su alerta no debe quedar para siempre."""
+    with lock:
+        conocidos = list(ieee_por_nombre.values())
+    if not conocidos:
+        return
+    try:
+        with conexion() as con:
+            con.execute(f"UPDATE cortes_sensor SET hasta = ? WHERE hasta IS NULL AND sensor NOT IN "
+                        f"({', '.join('?' * len(conocidos))})", [ahora(), *conocidos])
+    except sqlite3.Error as e:
+        print(f"Error cerrando cortes: {e}", flush=True)
 
 
 # ---------- base de datos (SQLite) ----------
@@ -272,6 +357,36 @@ CREATE TABLE IF NOT EXISTS cierres_periodo (
     valor   REAL NOT NULL,
     PRIMARY KEY (medidor, periodo)
 );
+
+-- Datos de la factura anual de calefacción, por período. Los del edificio solo aplican a un departamento.
+CREATE TABLE IF NOT EXISTS facturas_periodo (
+    periodo           TEXT PRIMARY KEY,
+    kwh_vivienda      REAL,
+    unidades_vivienda REAL,
+    kwh_edificio      REAL,
+    unidades_edificio REAL,
+    precio_kwh        REAL,            -- precio de la energía ese año, por kWh
+    pagado            REAL             -- monto total pagado al cierre del período, en €
+);
+
+-- Cortes de conexión de los sensores (availability de Zigbee2MQTT).
+-- 'desde' es cuándo se detectó (tarda lo que indique availability); 'ultima_lectura' es el último dato real.
+CREATE TABLE IF NOT EXISTS cortes_sensor (
+    id             TEXT PRIMARY KEY,
+    sensor         TEXT NOT NULL,
+    desde          TEXT NOT NULL,
+    hasta          TEXT,           -- NULL mientras el sensor siga sin conexión
+    ultima_lectura TEXT,
+    linkquality    INTEGER
+);
+CREATE INDEX IF NOT EXISTS cortes_por_desde ON cortes_sensor (desde);
+
+-- Temperatura media exterior de cada día (Open-Meteo): reparte el consumo entre lecturas según el frío.
+-- Se puede volver a descargar; depende de la ubicación configurada y se borra si esta cambia.
+CREATE TABLE IF NOT EXISTS clima_diario (
+    fecha      TEXT PRIMARY KEY,   -- AAAA-MM-DD
+    temp_media REAL NOT NULL
+);
 """
 NIVEL_MAX = 5
 # 0.5 = ❄ protección antiheladas (en la rueda va entre 0 y 1); de 1 a 5 también valen los medios puntos
@@ -330,6 +445,8 @@ COLUMNAS_NUEVAS = [
     ("lecturas_medidor", "valor_cierre", "REAL"),
     # 'calefaccion' (Heizkostenverteiler: vuelve a 0 en cada período) o 'agua_caliente' (Warmwasserzähler: suma siempre)
     ("medidores", "tipo", "TEXT NOT NULL DEFAULT 'calefaccion'"),
+    ("facturas_periodo", "precio_kwh", "REAL"),
+    ("facturas_periodo", "pagado", "REAL"),
 ]
 TIPOS_MEDIDOR = ("calefaccion", "agua_caliente")
 
@@ -346,12 +463,16 @@ def iniciar_db():
 
 # ---------- guardado periódico ----------
 
-def guardar_lecturas():
-    fecha = datetime.now()
-    filas = [{"fecha_hora": fecha.isoformat(timespec="seconds"), "sensor": s, **v}
-             for s, v in sorted(lecturas_actuales().items())]
+def guardar_lecturas(fecha=None):
+    fecha = fecha or datetime.now()
+    limite = (fecha - timedelta(minutes=MINUTOS_LECTURA_VALIDA)).isoformat(timespec="seconds")
     with lock:
         a = dict(afuera)
+        estados = dict(conexion_sensores)
+    # Un sensor sin datos recientes queda como hueco, no como una línea plana con su último valor
+    filas = [{"fecha_hora": fecha.isoformat(timespec="seconds"), "sensor": s, **v}
+             for s, v in sorted(lecturas_actuales().items())
+             if v["ultima_lectura"] >= limite and estados.get(s) != "offline"]
     if a.get("temperatura") is not None and \
             datetime.fromisoformat(a["hora"]) > fecha - timedelta(seconds=3 * INTERVALO_CLIMA):
         filas.append({"fecha_hora": fecha.isoformat(timespec="seconds"), "sensor": AFUERA,
@@ -365,6 +486,14 @@ def guardar_lecturas():
                         f"VALUES ({', '.join(':' + c for c in COL_TEMP)})", filas)
     print(f"{len(filas)} lecturas guardadas", flush=True)
     return len(filas)
+
+
+def leer_al_instante(fecha_iso):
+    """Guarda una lectura de todos los sensores con la hora exacta de abrir/cerrar una ventana."""
+    try:
+        guardar_lecturas(datetime.fromisoformat(fecha_iso))
+    except Exception as e:  # noqa: BLE001 - la ventana ya quedó registrada
+        print(f"Error guardando la lectura de la ventana: {e}", flush=True)
 
 
 def bucle_guardado():
@@ -383,6 +512,9 @@ def bucle_guardado():
 # ---------- clima de afuera ----------
 
 GEOCODING = "https://geocoding-api.open-meteo.com/v1/"
+ARCHIVO_CLIMA = "https://archive-api.open-meteo.com/v1/archive?"
+HORAS_ENTRE_ARCHIVO = 6
+proximo_archivo = 0.0   # time.time() a partir del cual se vuelve a consultar el histórico
 
 
 def texto_ubicacion(r):
@@ -442,12 +574,42 @@ def actualizar_clima():
         })
 
 
+def completar_clima_diario():
+    """Descarga las temperaturas diarias que falten desde el primer período o lectura de medidor hasta ayer."""
+    global proximo_archivo
+    if time.time() < proximo_archivo:
+        return
+    with conexion() as con:
+        inicio = con.execute("SELECT MIN(f) AS f FROM (SELECT MIN(inicio) AS f FROM periodos "
+                             "UNION ALL SELECT MIN(substr(fecha_hora, 1, 10)) FROM lecturas_medidor)").fetchone()["f"]
+        conocidas = {r["fecha"] for r in con.execute("SELECT fecha FROM clima_diario")}
+    if not inicio:
+        return
+    primero = datetime.fromisoformat(inicio).date()
+    dias = [primero + timedelta(days=i) for i in range((datetime.now().date() - primero).days)]
+    faltan = [d.isoformat() for d in dias if d.isoformat() not in conocidas]
+    if faltan:
+        u = leer_config()["ubicacion"]
+        d = obtener_json(ARCHIVO_CLIMA + urllib.parse.urlencode({
+            "latitude": u["lat"], "longitude": u["lon"], "timezone": "auto", "daily": "temperature_2m_mean",
+            "start_date": faltan[0], "end_date": faltan[-1]}))["daily"]
+        filas = [(f, t) for f, t in zip(d["time"], d["temperature_2m_mean"]) if t is not None]
+        with conexion() as con:
+            con.executemany("INSERT OR REPLACE INTO clima_diario (fecha, temp_media) VALUES (?, ?)", filas)
+        print(f"Clima histórico: {len(filas)} días guardados", flush=True)
+    proximo_archivo = time.time() + HORAS_ENTRE_ARCHIVO * 3600
+
+
 def bucle_clima():
     while True:
         try:
             completar_nombres_ubicacion()
         except Exception as e:  # noqa: BLE001
             print(f"Error completando la ubicación: {e}", flush=True)
+        try:
+            completar_clima_diario()
+        except Exception as e:  # noqa: BLE001 - sin histórico el consumo se reparte parejo
+            print(f"Error obteniendo el clima histórico: {e}", flush=True)
         try:
             actualizar_clima()
         except Exception as e:  # noqa: BLE001
@@ -506,6 +668,30 @@ def otra_abierta(con, sensor, excluir=""):
 def guardar_ventana(con, v):
     con.execute("INSERT OR REPLACE INTO ventanas (id, sensor, inicio, fin, nota) VALUES (?, ?, ?, ?, ?)",
                 (v["id"], v["sensor"], v["inicio"], v["fin"] or None, v["nota"]))
+
+
+def nivel_termostato(con, sensor, fecha, incluir=True):
+    """Nivel vigente del termostato de una habitación en un momento (None si nunca se registró)."""
+    r = con.execute(f"SELECT nivel FROM termostatos WHERE sensor = ? AND fecha_hora {'<=' if incluir else '<'} ? "
+                    "ORDER BY fecha_hora DESC LIMIT 1", (sensor, fecha)).fetchone()
+    return None if r is None else r["nivel"]
+
+
+def termostato_al_abrir(con, v):
+    """Al abrir una ventana, el termostato de la habitación se pone en 0 (si no lo estaba ya)."""
+    nivel = nivel_termostato(con, v["sensor"], v["inicio"])
+    if nivel:
+        con.execute("INSERT OR REPLACE INTO termostatos (id, sensor, fecha_hora, nivel) VALUES (?, ?, ?, 0)",
+                    (uuid.uuid4().hex[:12], v["sensor"], v["inicio"]))
+
+
+def termostato_al_cerrar(con, v):
+    """Al cerrar, vuelve al nivel que tenía antes de abrir. Si mientras estuvo abierta alguien
+    cambió el termostato a mano (ya no está en 0), se respeta ese cambio."""
+    antes = nivel_termostato(con, v["sensor"], v["inicio"], incluir=False)
+    if antes and nivel_termostato(con, v["sensor"], v["fin"]) == 0:
+        con.execute("INSERT OR REPLACE INTO termostatos (id, sensor, fecha_hora, nivel) VALUES (?, ?, ?, ?)",
+                    (uuid.uuid4().hex[:12], v["sensor"], v["fin"], antes))
 
 
 def ultimas_manuales(ids):
@@ -575,6 +761,52 @@ def aplicar_cambios(ventana, datos):
     return ventana
 
 
+def impacto_ventana(con, v):
+    """Cómo cambió la habitación mientras la ventana estuvo abierta (lecturas del mismo sensor).
+
+    Compara la última lectura de hasta 60 min antes de abrir con la mínima de temperatura
+    (y la humedad en ese momento) entre la apertura y 30 min después del cierre, porque la habitación
+    sigue enfriándose un rato. Si la ventana sigue abierta, hasta ahora.
+    """
+    fin = (datetime.fromisoformat(v["fin"]) + timedelta(minutes=30)).isoformat(timespec="seconds") if v["fin"] else ahora()
+    inicio = datetime.fromisoformat(v["inicio"])
+    previo = con.execute(
+        "SELECT fecha_hora, temperatura, humedad FROM lecturas WHERE sensor = ? AND fecha_hora <= ? AND fecha_hora >= ? "
+        "AND temperatura IS NOT NULL ORDER BY fecha_hora DESC LIMIT 1",
+        (v["sensor"], v["inicio"], (inicio - timedelta(minutes=60)).isoformat(timespec="seconds"))).fetchone()
+    aproximado = False
+    if previo is None:  # sin lectura previa cercana: se usa la más próxima en el tiempo (antes o después), hasta 3 h
+        cerca = con.execute(
+            "SELECT fecha_hora, temperatura, humedad FROM lecturas WHERE sensor = ? AND fecha_hora BETWEEN ? AND ? "
+            "AND temperatura IS NOT NULL", (v["sensor"], (inicio - timedelta(hours=3)).isoformat(timespec="seconds"),
+                                            (inicio + timedelta(hours=3)).isoformat(timespec="seconds"))).fetchall()
+        if cerca:
+            previo = min(cerca, key=lambda r: abs((datetime.fromisoformat(r["fecha_hora"]) - inicio).total_seconds()))
+            aproximado = True
+    minima = con.execute(
+        "SELECT fecha_hora, temperatura, humedad FROM lecturas WHERE sensor = ? AND fecha_hora > ? AND fecha_hora <= ? "
+        "AND temperatura IS NOT NULL ORDER BY temperatura ASC, fecha_hora ASC LIMIT 1",
+        (v["sensor"], v["inicio"], fin)).fetchone()
+    if previo is None or minima is None:
+        return None
+    # Humedad mínima real (no la del momento más frío). Solo con una lectura previa real y si el sensor reportó durante
+    # la apertura o hasta 15 min después del cierre: si estaba caído, lo guardado repite un valor viejo.
+    hum_caida = None
+    if previo["humedad"] is not None and not aproximado:
+        limite = (datetime.fromisoformat(v["fin"]) + timedelta(minutes=15)).isoformat(timespec="seconds") if v["fin"] else ahora()
+        medidas = "sensor = ? AND coalesce(ultima_lectura, fecha_hora) >= ? AND coalesce(ultima_lectura, fecha_hora) <= ?"
+        reporto = con.execute(f"SELECT 1 FROM lecturas WHERE {medidas} LIMIT 1", (v["sensor"], v["inicio"], limite)).fetchone()
+        hum = con.execute(f"SELECT MIN(humedad) AS h FROM lecturas WHERE {medidas} AND humedad IS NOT NULL",
+                          (v["sensor"], v["inicio"], fin)).fetchone()["h"]
+        if reporto is not None and hum is not None:
+            hum_caida = round(previo["humedad"] - hum, 1)
+    return {"temp_antes": previo["temperatura"], "temp_min": minima["temperatura"], "hum_caida": hum_caida,
+            "caida": round(previo["temperatura"] - minima["temperatura"], 2),
+            "hum_antes": previo["humedad"], "hum_min": minima["humedad"],
+            "aproximado": aproximado,
+            "minutos_a_min": round((datetime.fromisoformat(minima["fecha_hora"]) - datetime.fromisoformat(v["inicio"])).total_seconds() / 60)}
+
+
 def con_nombre(v, cfg):
     return {**v, "nombre": nombre_de(v["sensor"], cfg)}
 
@@ -604,6 +836,13 @@ CSV_ARCHIVOS = {
     "ventanas": {"es": "ventanas", "en": "windows", "de": "fenster"},
     "termostatos": {"es": "termostatos", "en": "thermostats", "de": "thermostate"},
     "consumo": {"es": "consumo", "en": "consumption", "de": "verbrauch"},
+    "medidores": {"es": "medidores", "en": "meters", "de": "zaehler"},
+    "lecturas_medidor": {"es": "lecturas_medidor", "en": "meter_readings", "de": "zaehlerstaende"},
+    "periodos": {"es": "periodos", "en": "periods", "de": "zeitraeume"},
+    "cierres_periodo": {"es": "cierres_periodo", "en": "period_closings", "de": "periodenabschluesse"},
+    "cortes_sensor": {"es": "cortes_sensor", "en": "sensor_outages", "de": "sensorausfaelle"},
+    "facturas_periodo": {"es": "facturas_periodo", "en": "period_bills", "de": "abrechnungen"},
+    "todo": {"es": "hausklima_todos_los_datos", "en": "hausklima_all_data", "de": "hausklima_alle_daten"},
 }
 CSV_COLUMNAS = {
     "fecha_hora": {"es": "Fecha y hora", "en": "Date and time", "de": "Datum und Uhrzeit"},
@@ -631,6 +870,14 @@ CSV_COLUMNAS = {
     "acumulado": {"es": "Acumulado", "en": "Cumulative", "de": "Kumuliert"},
     "reinicio": {"es": "Medidor reiniciado", "en": "Meter reset", "de": "Zähler zurückgesetzt"},
     "tipo": {"es": "Tipo", "en": "Type", "de": "Art"},
+    "nombre": {"es": "Nombre", "en": "Name", "de": "Name"},
+    "valor": {"es": "Valor", "en": "Value", "de": "Wert"},
+    "kwh_vivienda": {"es": "kWh vivienda", "en": "kWh home", "de": "kWh Wohnung"},
+    "unidades_vivienda": {"es": "Unidades vivienda", "en": "Units home", "de": "Einheiten Wohnung"},
+    "kwh_edificio": {"es": "kWh edificio", "en": "kWh building", "de": "kWh Gebäude"},
+    "unidades_edificio": {"es": "Unidades edificio", "en": "Units building", "de": "Einheiten Gebäude"},
+    "precio_kwh": {"es": "Precio (€/kWh)", "en": "Price (€/kWh)", "de": "Preis (€/kWh)"},
+    "pagado": {"es": "Pagado (€)", "en": "Paid (€)", "de": "Bezahlt (€)"},
 }
 CSV_VALORES = {
     "lectura": {"es": "Lectura", "en": "Reading", "de": "Ablesung"},
@@ -647,12 +894,17 @@ def valor_csv(clave, idioma):
     return CSV_VALORES.get(clave, {}).get(idioma, clave)
 
 
-def respuesta_csv(archivo, columnas, filas, idioma):
+def texto_csv(columnas, filas, idioma):
     buf = io.StringIO()
     buf.write("﻿")  # BOM: así Excel abre bien los acentos y las diéresis
     w = csv.writer(buf)
     w.writerow([CSV_COLUMNAS.get(c, {}).get(idioma, c) for c in columnas])
     w.writerows([[f.get(c, "") for c in columnas] for f in filas])
+    return buf.getvalue()
+
+
+def respuesta_csv(archivo, columnas, filas, idioma):
+    buf = io.StringIO(texto_csv(columnas, filas, idioma))
     nombre = CSV_ARCHIVOS[archivo].get(idioma, archivo) + ".csv"
     return Response(buf.getvalue(), mimetype="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="{nombre}"'})
@@ -772,15 +1024,21 @@ def api_estado():
     lect = {**lecturas_actuales(), **ultimas_manuales(manuales)}
     abiertas = ventanas_abiertas()
     termos = termostatos_actuales()
+    with conexion() as con:
+        cortes = {r["sensor"]: dict(r) for r in con.execute("SELECT * FROM cortes_sensor WHERE hasta IS NULL")}
+    with lock:
+        estados = dict(conexion_sensores)
     ids = set(lect) | set(cfg["habitaciones"]) | manuales
     sensores = [{"id": s, "nombre": nombre_de(s, cfg), "nombre_configurado": cfg["habitaciones"].get(s, ""),
                  "manual": s in manuales, **lect.get(s, {}), "ventana_abierta": abiertas.get(s),
-                 "termostato": termos.get(s)} for s in ids]
+                 "termostato": termos.get(s), "conexion": "offline" if s in cortes else estados.get(s),
+                 "corte": cortes.get(s)} for s in ids]
     sensores.sort(key=lambda s: s["nombre"].lower())
     with lock:
         a = dict(afuera)
     return jsonify(sensores=sensores, afuera=a, ubicacion=cfg["ubicacion"],
-                   intervalo_minutos=cfg["intervalo_minutos"], humedad_ref=cfg["humedad_ref"], temp_ref=cfg["temp_ref"],
+                   intervalo_minutos=cfg["intervalo_minutos"], segundos_vivo=cfg["segundos_vivo"],
+                   humedad_ref=cfg["humedad_ref"], temp_ref=cfg["temp_ref"],
                    fecha_mudanza=cfg["fecha_mudanza"], ahora=ahora())
 
 
@@ -791,6 +1049,279 @@ def api_guardar_ahora():
     if not n:
         abort(409, "err.nada_que_guardar")
     return jsonify(guardadas=n, fecha_hora=ahora())
+
+
+# ---------- métricas de la casa ----------
+
+MINUTOS_ANTES_APERTURA = 60     # antigüedad máxima de la lectura de referencia antes de abrir
+MINUTOS_TRAS_CIERRE = 15        # el sensor debe haber reportado hasta aquí: si no, estaba caído
+MINUTOS_RECUPERACION = 60
+MINUTOS_HUECO_MAXIMO = 90       # no se interpola entre lecturas más separadas
+
+
+def serie_real(con, sensor):
+    """Lecturas realmente medidas: una por cada 'ultima_lectura', sin las copias que se guardan mientras no hay datos nuevos."""
+    vistas, puntos = set(), []
+    for r in con.execute("SELECT fecha_hora, temperatura, humedad, ultima_lectura FROM lecturas WHERE sensor = ? "
+                         "AND temperatura IS NOT NULL ORDER BY fecha_hora", (sensor,)):
+        momento = r["ultima_lectura"] or r["fecha_hora"]
+        if momento not in vistas:
+            vistas.add(momento)
+            puntos.append((datetime.fromisoformat(momento), r["temperatura"], r["humedad"]))
+    return sorted(puntos, key=lambda p: p[0])
+
+
+def interpolar(serie, momento, indice):
+    """Valor de la columna 'indice' en un momento, entre las dos lecturas vecinas (None si están muy separadas)."""
+    previas = [p for p in serie if p[0] <= momento and p[indice] is not None]
+    siguientes = [p for p in serie if p[0] >= momento and p[indice] is not None]
+    if not previas or not siguientes:
+        return None
+    a, b = previas[-1], siguientes[0]
+    if a[0] == b[0]:
+        return a[indice]
+    if b[0] - a[0] > timedelta(minutes=MINUTOS_HUECO_MAXIMO):
+        return None
+    return a[indice] + (b[indice] - a[indice]) * (momento - a[0]) / (b[0] - a[0])
+
+
+def efecto_apertura(serie, inicio, fin, siguiente):
+    """Humedad y temperatura antes, en el mínimo y una hora después. None si no hubo lecturas reales durante la apertura."""
+    previas = [p for p in serie if inicio - timedelta(minutes=MINUTOS_ANTES_APERTURA) <= p[0] <= inicio]
+    durante = [p for p in serie if inicio < p[0] <= fin + timedelta(minutes=MINUTOS_TRAS_CIERRE)]
+    if not previas or not durante:
+        return None
+    antes, res = previas[-1], {}
+    for clave, indice in (("hum", 2), ("temp", 1)):
+        validos = [p for p in durante if p[indice] is not None]
+        if antes[indice] is None or not validos:
+            continue
+        minimo = min(validos, key=lambda p: p[indice])
+        minutos = (minimo[0] - inicio).total_seconds() / 60
+        res[f"{clave}_caida"] = antes[indice] - minimo[indice]
+        if minutos > 0:
+            res[f"{clave}_por_min"] = res[f"{clave}_caida"] / minutos
+        despues = minimo[0] + timedelta(minutes=MINUTOS_RECUPERACION)
+        if despues <= siguiente:   # otra apertura interrumpiría la recuperación
+            valor = interpolar(serie, despues, indice)
+            if valor is not None:
+                res[f"{clave}_recupera"] = valor - minimo[indice]
+    return res
+
+
+def caidas_nocturnas(serie, afuera, ventanas):
+    """Baja de temperatura de 23:00 a 06:00, en noches sin ventanas abiertas y con lecturas reales en ambos extremos."""
+    res = []
+    if not serie:
+        return res
+    dia = serie[0][0].date()
+    while dia < serie[-1][0].date():
+        a = datetime.combine(dia, datetime.min.time()) + timedelta(hours=23)
+        b = a + timedelta(hours=7)
+        dia += timedelta(days=1)
+        ta, tb = interpolar(serie, a, 1), interpolar(serie, b, 1)
+        if ta is None or tb is None or any(i < b and f > a for i, f in ventanas):
+            continue
+        exterior = [p[1] for p in afuera if a <= p[0] <= b]
+        res.append({"caida": ta - tb, "afuera": statistics.mean(exterior) if exterior else None})
+    return res
+
+
+def mediana(eventos, clave, decimales=1):
+    valores = [e[clave] for e in eventos if e.get(clave) is not None]
+    return round(statistics.median(valores), decimales) if valores else None
+
+
+def resumen_metricas(aperturas, noches):
+    con_hum = [a for a in aperturas if a.get("hum_caida") is not None]
+    con_temp = [a for a in aperturas if a.get("temp_caida") is not None]
+    return {"n_hum": len(con_hum), "hum_caida": mediana(aperturas, "hum_caida"), "hum_por_min": mediana(aperturas, "hum_por_min"),
+            "hum_recupera": mediana(aperturas, "hum_recupera"), "n_hum_recupera": sum(a.get("hum_recupera") is not None for a in aperturas),
+            "n_temp": len(con_temp), "temp_caida": mediana(aperturas, "temp_caida"),
+            "temp_recupera": mediana(aperturas, "temp_recupera"), "n_temp_recupera": sum(a.get("temp_recupera") is not None for a in aperturas),
+            "n_noches": len(noches), "noche_caida": mediana(noches, "caida"), "noche_afuera": mediana(noches, "afuera")}
+
+
+@app.get("/api/metricas")
+def api_metricas():
+    """Cómo se comporta cada habitación, con medianas para que una ducha o una apertura rara no las distorsione."""
+    cfg = leer_config()
+    manuales = set(cfg["sensores_manuales"])
+    todas_aperturas, todas_noches, sensores = [], [], []
+    with conexion() as con:
+        afuera = serie_real(con, AFUERA)
+        ids = [r["sensor"] for r in con.execute("SELECT DISTINCT sensor FROM lecturas") if r["sensor"] != AFUERA and r["sensor"] not in manuales]
+        for sensor in ids:
+            serie = serie_real(con, sensor)
+            ventanas = [(datetime.fromisoformat(r["inicio"]), datetime.fromisoformat(r["fin"])) for r in
+                        con.execute("SELECT inicio, fin FROM ventanas WHERE sensor = ? AND fin IS NOT NULL ORDER BY inicio", (sensor,))]
+            aperturas = []
+            for n, (inicio, fin) in enumerate(ventanas):
+                siguiente = ventanas[n + 1][0] if n + 1 < len(ventanas) else datetime.max
+                efecto = efecto_apertura(serie, inicio, fin, siguiente)
+                if efecto:
+                    aperturas.append(efecto)
+            noches = caidas_nocturnas(serie, afuera, ventanas)
+            todas_aperturas += aperturas
+            todas_noches += noches
+            sensores.append({"sensor": sensor, "nombre": nombre_de(sensor, cfg), **resumen_metricas(aperturas, noches)})
+    sensores.sort(key=lambda s: s["nombre"].lower())
+    return jsonify(sensores=sensores, casa=resumen_metricas(todas_aperturas, todas_noches))
+
+
+# ---------- vivienda y energía ----------
+
+COLUMNAS_FACTURA = ("kwh_vivienda", "unidades_vivienda", "kwh_edificio", "unidades_edificio", "precio_kwh", "pagado")
+
+
+def medidores_calefaccion(con):
+    return con.execute("SELECT id, nombre FROM medidores WHERE tipo = 'calefaccion' ORDER BY nombre COLLATE NOCASE").fetchall()
+
+
+def positivo(valor):
+    """Número mayor que 0, o None si el campo quedó vacío."""
+    if valor in ("", None):
+        return None
+    n = numero(valor)
+    if n is None or n <= 0:
+        abort(400, "err.vivienda")
+    return n
+
+
+@app.get("/api/vivienda")
+def api_vivienda():
+    with conexion() as con:
+        return jsonify(vivienda=leer_config()["vivienda"], periodos=leer_periodos(con),
+                       medidores=[dict(m) for m in medidores_calefaccion(con)],
+                       facturas={r["periodo"]: dict(r) for r in con.execute("SELECT * FROM facturas_periodo")})
+
+
+@app.put("/api/vivienda")
+def api_guardar_vivienda():
+    datos = request.get_json(silent=True) or {}
+    m2_medidores = datos.get("m2_medidores") or {}
+    facturas = datos.get("facturas") or {}
+    if not isinstance(m2_medidores, dict) or not isinstance(facturas, dict):
+        abort(400, "err.datos_invalidos")
+    vivienda = {"es_departamento": bool(datos.get("es_departamento")), "m2_total": positivo(datos.get("m2_total")),
+                "m2_edificio": positivo(datos.get("m2_edificio")),
+                "m2_medidores": {str(k): positivo(v) for k, v in m2_medidores.items() if v not in ("", None)}}
+    filas = [(str(p), *(positivo((f or {}).get(c)) for c in COLUMNAS_FACTURA)) for p, f in facturas.items()]
+    with lock, conexion() as con:
+        conocidos = {p["id"] for p in leer_periodos(con)}
+        if any(f[0] not in conocidos for f in filas):
+            abort(400, "err.datos_invalidos")
+        for f in filas:
+            if any(v is not None for v in f[1:]):
+                con.execute(f"INSERT OR REPLACE INTO facturas_periodo (periodo, {', '.join(COLUMNAS_FACTURA)}) "
+                            f"VALUES ({', '.join('?' * (len(COLUMNAS_FACTURA) + 1))})", f)
+            else:
+                con.execute("DELETE FROM facturas_periodo WHERE periodo = ?", (f[0],))
+        cfg = leer_config()
+        cfg["vivienda"] = vivienda
+        guardar_config(cfg)
+    return jsonify(ok=True)
+
+
+def unidades_por_periodo(con, medidores, periodos):
+    """{período: {medidor: unidades}} contando solo desde la mudanza."""
+    res = {p["id"]: {} for p in periodos}
+    for m in medidores:
+        for f in calcular_consumo(con, m["id"], periodos):
+            if f["periodo"] in res and f["consumo"] and not f.get("antes_mudanza"):
+                res[f["periodo"]][m["id"]] = res[f["periodo"]].get(m["id"], 0) + f["consumo"]
+    return res
+
+
+def por_m2(kwh, m2, horas):
+    if kwh is None or not m2:
+        return {"kwh_m2": None, "w_m2": None}
+    return {"kwh_m2": kwh / m2, "w_m2": kwh * 1000 / m2 / horas if horas else None}
+
+
+@app.get("/api/energia")
+def api_energia():
+    """Energía por período. Las unidades del medidor no son kWh: la factura anual da cuántos kWh vale cada una.
+    Sin factura (p. ej. el período en curso) se usa la media ponderada de las facturas anteriores (kWh ÷ unidades
+    acumulados) y el resultado queda como estimado. En un departamento se prefieren los totales del edificio: cubren
+    años completos, mientras que la vivienda puede tener un año parcial por la mudanza."""
+    cfg = leer_config()
+    viv = cfg["vivienda"]
+    m2_medidores = viv["m2_medidores"]
+    with conexion() as con:
+        periodos = leer_periodos(con)
+        medidores = medidores_calefaccion(con)
+        facturas = {r["periodo"]: dict(r) for r in con.execute("SELECT * FROM facturas_periodo")}
+        unidades = unidades_por_periodo(con, medidores, periodos)
+    es_dpto = viv["es_departamento"]
+    m2_vivienda = viv["m2_total"] or sum(v for k, v in m2_medidores.items() if any(m["id"] == k for m in medidores)) or None
+    ahora_dt = datetime.now()
+    mudanza = datetime.fromisoformat(cfg["fecha_mudanza"]) if cfg["fecha_mudanza"] else None
+    filas, ultimo_precio, kwh_acumulado, unidades_acumuladas = [], None, 0.0, 0.0
+    for p in periodos:
+        f = facturas.get(p["id"], {})
+        panel = sum(unidades[p["id"]].values())
+        ini, fin = limites_periodo(p)
+        if ini > ahora_dt:
+            continue
+        horas = max((min(fin, ahora_dt) - max(ini, mudanza or ini)).total_seconds() / 3600, 0)
+        antes_de_mudarse = bool(mudanza and fin < mudanza)      # no hay consumo propio; sí datos del edificio
+        parcial = bool(mudanza and ini < mudanza <= fin)
+        base = f.get("unidades_vivienda") or panel
+        factor, fuente = None, None
+        if f.get("kwh_vivienda") and base:
+            factor, fuente = f["kwh_vivienda"] / base, "vivienda"
+        elif es_dpto and f.get("kwh_edificio") and f.get("unidades_edificio"):
+            factor, fuente = f["kwh_edificio"] / f["unidades_edificio"], "edificio"
+        estimado = factor is None
+        if estimado:
+            factor = kwh_acumulado / unidades_acumuladas if unidades_acumuladas else None
+        elif es_dpto and f.get("kwh_edificio") and f.get("unidades_edificio"):
+            kwh_acumulado += f["kwh_edificio"]
+            unidades_acumuladas += f["unidades_edificio"]
+        else:
+            kwh_acumulado += factor * base
+            unidades_acumuladas += base
+        kwh = f["kwh_vivienda"] if fuente == "vivienda" else (panel * factor if factor and not antes_de_mudarse else None)
+        precio = f.get("precio_kwh") or ultimo_precio
+        ultimo_precio = precio
+        fila = {"id": p["id"], "nombre": p["nombre"], "unidades": panel, "unidades_factura": f.get("unidades_vivienda"),
+                "factor": factor, "fuente": fuente, "estimado": estimado, "kwh": kwh, **por_m2(kwh, m2_vivienda, horas), "edificio": None,
+                "precio": precio, "precio_estimado": bool(precio) and not f.get("precio_kwh"),
+                "costo": kwh * precio if kwh is not None and precio else None, "pagado": f.get("pagado")}
+        if es_dpto and f.get("kwh_edificio"):
+            fila["edificio"] = {"kwh": f["kwh_edificio"], **por_m2(f["kwh_edificio"], viv["m2_edificio"], horas)}
+            # Con la mudanza a mitad de período, la vivienda cuenta solo una parte y el edificio el año completo
+            if fila["kwh_m2"] and fila["edificio"]["kwh_m2"] and not parcial:
+                fila["edificio"]["diferencia"] = (fila["kwh_m2"] / fila["edificio"]["kwh_m2"] - 1) * 100
+        filas.append({**fila, "horas": horas, "en_curso": fin >= ahora_dt, "parcial_mudanza": parcial, "por_medidor": {
+            m["id"]: {"unidades": unidades[p["id"]].get(m["id"], 0), "kwh": unidades[p["id"]].get(m["id"], 0) * factor if factor else None,
+                      **por_m2(unidades[p["id"]].get(m["id"], 0) * factor if factor else None, m2_medidores.get(m["id"]), horas)}
+            for m in medidores}})
+    return jsonify(es_departamento=es_dpto, m2_vivienda=m2_vivienda, m2_edificio=viv["m2_edificio"], periodos=filas,
+                   medidores=[{**dict(m), "m2": m2_medidores.get(m["id"])} for m in medidores])
+
+
+@app.get("/api/vivo")
+def api_vivo():
+    """Consulta liviana: el navegador pide /api/estado solo cuando esta versión cambia."""
+    return jsonify(version=version_vivo)
+
+
+@app.get("/api/clima_diario")
+def api_clima_diario():
+    with conexion() as con:
+        return jsonify([[r["fecha"], r["temp_media"]] for r in con.execute("SELECT * FROM clima_diario ORDER BY fecha")])
+
+
+@app.get("/api/cortes")
+def api_cortes():
+    """Registro de cortes de conexión de los sensores, del más reciente al más antiguo."""
+    cfg = leer_config()
+    limite = numero(request.args.get("limite"), int) or 200
+    with conexion() as con:
+        filas = con.execute("SELECT * FROM cortes_sensor ORDER BY desde DESC LIMIT ?", (min(max(limite, 1), 1000),)).fetchall()
+    return jsonify([{**dict(r), "nombre": nombre_de(r["sensor"], cfg)} for r in filas])
 
 
 @app.get("/api/temperaturas")
@@ -810,7 +1341,8 @@ def api_temperaturas_csv():
 @app.get("/api/ventanas")
 def api_ventanas():
     cfg = leer_config()
-    return jsonify([con_nombre(v, cfg) for v in ventanas_filtradas()])
+    with conexion() as con:
+        return jsonify([{**con_nombre(v, cfg), "impacto": impacto_ventana(con, v)} for v in ventanas_filtradas()])
 
 
 @app.get("/api/ventanas.csv")
@@ -831,6 +1363,10 @@ def api_crear_ventana():
         if not v["fin"] and otra_abierta(con, v["sensor"]):
             abort(409, "err.ya_abierta")
         guardar_ventana(con, v)
+        if not v["fin"]:
+            termostato_al_abrir(con, v)
+    if "inicio" not in (request.get_json(silent=True) or {}):
+        leer_al_instante(v["inicio"])  # la lectura del momento de abrir es la referencia (máx.)
     return jsonify(con_nombre(v, leer_config())), 201
 
 
@@ -849,9 +1385,13 @@ def api_editar_ventana(id_):
 def api_cerrar_ventana(id_):
     with lock, conexion() as con:
         v = obtener_ventana(con, id_)
-        if not v["fin"]:
+        cerrada_ahora = not v["fin"]
+        if cerrada_ahora:
             v["fin"] = max(ahora(), v["inicio"])
             guardar_ventana(con, v)
+            termostato_al_cerrar(con, v)
+    if cerrada_ahora:
+        leer_al_instante(v["fin"])
     return jsonify(con_nombre(v, leer_config()))
 
 
@@ -1251,6 +1791,7 @@ def api_borrar_periodo(id_):
         if not con.execute("DELETE FROM periodos WHERE id = ?", (id_,)).rowcount:
             abort(404, "err.no_encontrado")
         con.execute("DELETE FROM cierres_periodo WHERE periodo = ?", (id_,))
+        con.execute("DELETE FROM facturas_periodo WHERE periodo = ?", (id_,))
     return jsonify(ok=True)
 
 
@@ -1301,6 +1842,31 @@ def api_consumo_csv():
                                      "consumo_por_dia", "acumulado", "reinicio", "tipo"], filas, idioma)
 
 
+@app.get("/api/todo.zip")
+def api_todo_zip():
+    """Todas las tablas de la base de datos, sin filtros, en un ZIP con un CSV por tabla."""
+    cfg, idioma = leer_config(), idioma_pedido()
+    tablas = [("temperaturas", "lecturas"), ("ventanas", "ventanas"), ("termostatos", "termostatos"),
+              ("medidores", "medidores"), ("lecturas_medidor", "lecturas_medidor"),
+              ("periodos", "periodos"), ("cierres_periodo", "cierres_periodo"), ("cortes_sensor", "cortes_sensor"),
+              ("facturas_periodo", "facturas_periodo")]
+    orden = {"lecturas": "fecha_hora, sensor", "ventanas": "inicio", "termostatos": "sensor, fecha_hora",
+             "lecturas_medidor": "medidor, fecha_hora", "periodos": "inicio", "cortes_sensor": "desde"}
+    salida = io.BytesIO()
+    with conexion() as con, zipfile.ZipFile(salida, "w", zipfile.ZIP_DEFLATED) as z:
+        for archivo, tabla in tablas:
+            cur = con.execute(f"SELECT * FROM {tabla}" + (f" ORDER BY {orden[tabla]}" if tabla in orden else ""))
+            columnas = [c[0] for c in cur.description]
+            filas = [dict(zip(columnas, r)) for r in cur]
+            if "sensor" in columnas:
+                for f in filas:
+                    f["habitacion"] = nombre_de(f["sensor"], cfg, idioma) if f["sensor"] else ""
+                columnas.insert(columnas.index("sensor"), "habitacion")
+            z.writestr(CSV_ARCHIVOS[archivo].get(idioma, archivo) + ".csv", texto_csv(columnas, filas, idioma))
+    return Response(salida.getvalue(), mimetype="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{CSV_ARCHIVOS["todo"][idioma]}.zip"'})
+
+
 # ---------- sensores manuales ----------
 
 def guardar_config(cfg):
@@ -1340,6 +1906,52 @@ def api_borrar_manual(id_):
         cfg["habitaciones"].pop(id_, None)
         guardar_config(cfg)
     return jsonify(ok=True, registros_borrados=n)
+
+
+def mover_historial(con, origen, destino):
+    """Pasa lecturas, ventanas y termostatos de un sensor a otro. Si ya hay un registro en el
+    mismo instante en el destino, queda el del destino."""
+    for tabla in ("lecturas", "termostatos"):
+        con.execute(f"UPDATE OR IGNORE {tabla} SET sensor = ? WHERE sensor = ?", (destino, origen))
+        con.execute(f"DELETE FROM {tabla} WHERE sensor = ?", (origen,))
+    con.execute("UPDATE ventanas SET sensor = ? WHERE sensor = ?", (destino, origen))
+
+
+@app.post("/api/sensores_manuales/<id_>/automatico")
+def api_manual_a_automatico(id_):
+    """Vincula un sensor manual con un sensor Zigbee: el historial y el nombre pasan al Zigbee."""
+    destino = str((request.get_json(silent=True) or {}).get("destino") or "")
+    with lock:
+        conocidos = set(ieee_por_nombre.values())
+    conocidos |= set(lecturas_actuales())  # fuera del lock: lecturas_actuales lo toma
+    with lock:
+        cfg = leer_config()
+        exigir_manual(id_, cfg)
+        if (not destino or destino == AFUERA or destino in cfg["sensores_manuales"]
+                or destino not in conocidos | set(cfg["habitaciones"])):
+            abort(400, "err.destino_invalido")
+        with conexion() as con:
+            mover_historial(con, id_, destino)
+        cfg["habitaciones"][destino] = cfg["habitaciones"].pop(id_, "Manual")
+        cfg["sensores_manuales"].remove(id_)
+        guardar_config(cfg)
+    return jsonify(ok=True, id=destino)
+
+
+@app.post("/api/sensores_manuales/convertir/<id_>")
+def api_automatico_a_manual(id_):
+    """Convierte un sensor Zigbee en manual: el historial y el nombre pasan a un sensor manual nuevo."""
+    with lock:
+        cfg = leer_config()
+        if id_ == AFUERA or id_ in cfg["sensores_manuales"]:
+            abort(400, "err.no_automatico")
+        nuevo = "manual_" + uuid.uuid4().hex[:8]
+        with conexion() as con:
+            mover_historial(con, id_, nuevo)
+        cfg["habitaciones"][nuevo] = cfg["habitaciones"].pop(id_, f"Sensor {id_[-4:]}")
+        cfg["sensores_manuales"].append(nuevo)
+        guardar_config(cfg)
+    return jsonify(ok=True, id=nuevo)
 
 
 @app.post("/api/lecturas_manuales")
@@ -1406,6 +2018,11 @@ def api_guardar_config():
                 abort(400, "err.intervalo")
             cambio = minutos != cfg["intervalo_minutos"]
             cfg["intervalo_minutos"] = minutos
+        if "segundos_vivo" in datos:
+            segundos = numero(datos["segundos_vivo"], int)
+            if segundos is None or not SEGUNDOS_VIVO[0] <= segundos <= SEGUNDOS_VIVO[1]:
+                abort(400, "err.segundos_vivo")
+            cfg["segundos_vivo"] = segundos
         for clave, (bajo, alto, error) in LIMITES_REF.items():
             if clave in datos:
                 ref = datos[clave] or {}
@@ -1433,6 +2050,10 @@ def api_guardar_config():
             if nombres:
                 cfg["ubicacion"]["nombres"] = nombres
             # sin nombres (búsqueda sin id o sin conexión) los completa el hilo del clima
+            with conexion() as con:
+                con.execute("DELETE FROM clima_diario")   # eran de la ubicación anterior
+            global proximo_archivo
+            proximo_archivo = 0.0
         escribir_atomico(RUTA_CONFIG, json.dumps(cfg, ensure_ascii=False, indent=2))
     # avisar a los hilos recién después de escribir la config, para que lean el valor nuevo
     if datos.get("ubicacion"):

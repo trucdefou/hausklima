@@ -19,6 +19,8 @@ The sensors publish their readings to Zigbee2MQTT. The dashboard receives them o
 - Shows the current temperature and humidity of each sensor, plus outdoor conditions (Open-Meteo, based on the configured location).
 - Stores readings every N minutes (configurable from the dashboard) and charts them by date range, with zoom.
 - Logs when windows are opened and closed, and changes to thermostats.
+- Warns in the top bar when a sensor stops reporting, with signal status and an outage log in Settings.
+- Shows house metrics: humidity loss and recovery, cooling, and energy per m² from the annual heating bill, for a house or an apartment.
 - Supports manual sensors for rooms without a Zigbee sensor.
 - Tracks heating and hot water meter readings, with billing periods and consumption calculation.
 - Exports temperatures, windows, thermostats and consumption to CSV.
@@ -98,8 +100,13 @@ The frontend is plain static files (CoreUI, Chart.js, chartjs-plugin-zoom, flatp
    frontend:
      enabled: true
      port: 8080
+   availability:
+     enabled: true
+     passive:
+       timeout: 120   # minutes without data before a battery sensor counts as offline
    advanced:
      log_level: info
+     last_seen: ISO_8601_local   # real time of each reading
      network_key: GENERATE
      pan_id: GENERATE
      ext_pan_id: GENERATE
