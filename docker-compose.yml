@@ -39,6 +39,7 @@ services:
       - "8082:8000"
     volumes:
       - ./datos:/datos
+      - ./panel:/app:ro
     environment:
       - TZ=Europe/Berlin
       - PANEL_PASSWORD=${PANEL_PASSWORD:?Falta PANEL_PASSWORD en .env}

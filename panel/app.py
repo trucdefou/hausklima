@@ -59,9 +59,74 @@ CONFIG_DEFECTO = {
     "temp_ref": {"min": 18, "max": 22},
     "fecha_mudanza": "",    # AAAA-MM-DD: lo consumido antes de esta fecha era del inquilino anterior
     # m2_medidores: superficie por medidor de calefacción; m2_edificio solo se usa si es_departamento
-    "vivienda": {"es_departamento": False, "m2_total": None, "m2_edificio": None, "m2_medidores": {}},
+    "vivienda": {"es_departamento": False, "m2_total": None, "m2_edificio": None, "m2_medidores": {}, "personas": None, "energia": None},
+    # Warmwasserspiegel (co2online) por año: límite en m³/año de las categorías A, B y C, de 1 a 5 personas. Por encima, D.
+    "espejos_agua": {"2024": {
+        "casa": [[10, 13, 18], [17, 26, 36], [29.7, 40, 53], [40, 56, 85], [50, 70, 100]],
+        "departamento": [[7.3, 11, 17], [15, 23, 33.6], [21.6, 32.7, 47.2], [26, 40, 59], [32.9, 50, 74.5]],
+    }},
+    # Heizspiegel (co2online) por año de facturación: límites A, B y C en kWh y € por m² y año, por franja de superficie del edificio
+    "heizspiegels": {
+        "2023": {"edicion": 2024, "min_m2": 100, "franjas": [
+            {"hasta": 250, "filas": {
+                "Erdgas": {"kwh": [78, 143, 230], "costo": [13.1, 21.3, 31.9]},
+                "Heizöl": {"kwh": [95, 148, 230], "costo": [13.0, 18.3, 26.1]},
+                "Fernwärme": {"kwh": [66, 123, 197], "costo": [10.3, 16.7, 24.5]},
+                "Wärmepumpe": {"kwh": [19, 39, 101], "costo": [8.0, 15.2, 29.9]},
+                "Holzpellets": {"kwh": [71, 130, 219], "costo": [8.9, 13.3, 19.6]},
+            }},
+            {"hasta": 500, "filas": {
+                "Erdgas": {"kwh": [76, 137, 218], "costo": [12.5, 20.1, 29.6]},
+                "Heizöl": {"kwh": [89, 141, 217], "costo": [12.1, 17.2, 24.3]},
+                "Fernwärme": {"kwh": [63, 117, 191], "costo": [9.9, 16.2, 23.9]},
+                "Wärmepumpe": {"kwh": [18, 37, 97], "costo": [7.7, 14.0, 29.0]},
+                "Holzpellets": {"kwh": [67, 119, 205], "costo": [8.2, 12.0, 18.0]},
+            }},
+            {"hasta": 1000, "filas": {
+                "Erdgas": {"kwh": [73, 131, 205], "costo": [11.9, 19.0, 27.6]},
+                "Heizöl": {"kwh": [84, 135, 205], "costo": [11.2, 16.3, 22.7]},
+                "Fernwärme": {"kwh": [60, 113, 186], "costo": [9.6, 15.7, 23.5]},
+                "Wärmepumpe": {"kwh": [18, 36, 93], "costo": [7.5, 13.0, 28.2]},
+            }},
+            {"hasta": None, "filas": {
+                "Erdgas": {"kwh": [72, 128, 197], "costo": [11.6, 18.4, 26.4]},
+                "Heizöl": {"kwh": [80, 132, 197], "costo": [10.7, 15.7, 21.7]},
+                "Fernwärme": {"kwh": [58, 110, 183], "costo": [9.4, 15.4, 23.2]},
+                "Wärmepumpe": {"kwh": [17, 35, 90], "costo": [7.3, 12.4, 27.7]},
+            }},
+        ]},
+        "2024": {"edicion": 2025, "min_m2": 80, "franjas": [
+            {"hasta": 150, "filas": {
+                "Erdgas": {"kwh": [62, 121, 207], "costo": [6.9, 13.6, 23.2]},
+                "Heizöl": {"kwh": [100, 165, 263], "costo": [9.9, 16.4, 26.1]},
+                "Fernwärme": {"kwh": [38, 89, 191], "costo": [6.4, 15.2, 32.5]},
+                "Wärmepumpe": {"kwh": [20, 36, 82], "costo": [5.1, 9.2, 21.1]},
+                "Holzpellets": {"kwh": [74, 148, 249], "costo": [4.4, 8.8, 14.8]},
+            }},
+            {"hasta": 250, "filas": {
+                "Erdgas": {"kwh": [64, 116, 187], "costo": [7.2, 13.0, 21.0]},
+                "Heizöl": {"kwh": [92, 142, 220], "costo": [9.1, 14.1, 21.8]},
+                "Fernwärme": {"kwh": [41, 94, 169], "costo": [7.0, 16.1, 28.7]},
+                "Wärmepumpe": {"kwh": [18, 33, 77], "costo": [4.6, 8.5, 19.8]},
+                "Holzpellets": {"kwh": [72, 126, 219], "costo": [4.3, 7.5, 13.0]},
+            }},
+            {"hasta": 500, "filas": {
+                "Erdgas": {"kwh": [61, 114, 185], "costo": [9.0, 14.7, 22.3]},
+                "Heizöl": {"kwh": [78, 123, 197], "costo": [10.3, 14.7, 22.0]},
+                "Fernwärme": {"kwh": [36, 112, 203], "costo": [7.8, 17.5, 29.5]},
+                "Wärmepumpe": {"kwh": [17, 30, 69], "costo": [6.3, 9.7, 19.7]},
+                "Holzpellets": {"kwh": [60, 113, 196], "costo": [5.8, 8.8, 13.3]},
+            }},
+            {"hasta": None, "filas": {
+                "Erdgas": {"kwh": [59, 115, 177], "costo": [8.7, 14.8, 21.5]},
+                "Heizöl": {"kwh": [68, 127, 198], "costo": [9.3, 15.1, 22.2]},
+                "Fernwärme": {"kwh": [46, 87, 144], "costo": [9.7, 16.3, 25.7]},
+            }},
+        ]},
+    },
 }
 SEGUNDOS_VIVO = (3, 300)
+FUENTES_HEIZ = ("Erdgas", "Heizöl", "Fernwärme", "Wärmepumpe", "Holzpellets")
 LIMITES_REF = {"humedad_ref": (0, 100, "err.humedad_ref"), "temp_ref": (-10, 40, "err.temp_ref")}
 
 lock = threading.RLock()
@@ -148,6 +213,8 @@ def leer_config():
             cfg = json.load(f)
     except (OSError, ValueError):
         cfg = {}
+    if "espejo_agua" in cfg:   # formato anterior: una sola tabla, la de 2024
+        cfg.setdefault("espejos_agua", {"2024": cfg.pop("espejo_agua")})
     for clave, valor in CONFIG_DEFECTO.items():
         cfg.setdefault(clave, json.loads(json.dumps(valor)))
     return cfg
@@ -1203,9 +1270,16 @@ def api_guardar_vivienda():
     facturas = datos.get("facturas") or {}
     if not isinstance(m2_medidores, dict) or not isinstance(facturas, dict):
         abort(400, "err.datos_invalidos")
+    personas = numero(datos.get("personas"), int)
+    if datos.get("personas") not in ("", None) and (personas is None or not 1 <= personas <= 20):
+        abort(400, "err.vivienda")
+    energia = datos.get("energia") or None
+    if energia is not None and energia not in FUENTES_HEIZ:
+        abort(400, "err.vivienda")
     vivienda = {"es_departamento": bool(datos.get("es_departamento")), "m2_total": positivo(datos.get("m2_total")),
                 "m2_edificio": positivo(datos.get("m2_edificio")),
-                "m2_medidores": {str(k): positivo(v) for k, v in m2_medidores.items() if v not in ("", None)}}
+                "m2_medidores": {str(k): positivo(v) for k, v in m2_medidores.items() if v not in ("", None)},
+                "personas": personas, "energia": energia}
     filas = [(str(p), *(positivo((f or {}).get(c)) for c in COLUMNAS_FACTURA)) for p, f in facturas.items()]
     with lock, conexion() as con:
         conocidos = {p["id"] for p in leer_periodos(con)}
@@ -1285,7 +1359,7 @@ def api_energia():
         kwh = f["kwh_vivienda"] if fuente == "vivienda" else (panel * factor if factor and not antes_de_mudarse else None)
         precio = f.get("precio_kwh") or ultimo_precio
         ultimo_precio = precio
-        fila = {"id": p["id"], "nombre": p["nombre"], "unidades": panel, "unidades_factura": f.get("unidades_vivienda"),
+        fila = {"id": p["id"], "nombre": p["nombre"], "inicio": p["inicio"], "fin": p["fin"], "unidades": panel, "unidades_factura": f.get("unidades_vivienda"),
                 "factor": factor, "fuente": fuente, "estimado": estimado, "kwh": kwh, **por_m2(kwh, m2_vivienda, horas), "edificio": None,
                 "precio": precio, "precio_estimado": bool(precio) and not f.get("precio_kwh"),
                 "costo": kwh * precio if kwh is not None and precio else None, "pagado": f.get("pagado")}
@@ -1298,7 +1372,7 @@ def api_energia():
             m["id"]: {"unidades": unidades[p["id"]].get(m["id"], 0), "kwh": unidades[p["id"]].get(m["id"], 0) * factor if factor else None,
                       **por_m2(unidades[p["id"]].get(m["id"], 0) * factor if factor else None, m2_medidores.get(m["id"]), horas)}
             for m in medidores}})
-    return jsonify(es_departamento=es_dpto, m2_vivienda=m2_vivienda, m2_edificio=viv["m2_edificio"], periodos=filas,
+    return jsonify(es_departamento=es_dpto, energia=viv.get("energia"), m2_vivienda=m2_vivienda, m2_edificio=viv["m2_edificio"], periodos=filas,
                    medidores=[{**dict(m), "m2": m2_medidores.get(m["id"])} for m in medidores])
 
 
@@ -1984,6 +2058,77 @@ def api_borrar_lectura_manual():
     return jsonify(ok=True)
 
 
+def validar_espejo(datos):
+    """Tabla con los límites A, B y C para 1 a 5 personas, por tipo de vivienda; cada límite mayor que el anterior."""
+    if not isinstance(datos, dict) or set(datos) != {"casa", "departamento"}:
+        abort(400, "err.espejo_agua")
+    tabla = {}
+    for tipo, filas in datos.items():
+        if not isinstance(filas, list) or len(filas) != 5:
+            abort(400, "err.espejo_agua")
+        tabla[tipo] = []
+        for fila in filas:
+            if not isinstance(fila, list) or len(fila) != 3:
+                abort(400, "err.espejo_agua")
+            a, b, c = (numero(v) for v in fila)
+            if None in (a, b, c) or not 0 < a < b < c <= 10000:
+                abort(400, "err.espejo_agua")
+            tabla[tipo].append([a, b, c])
+    return tabla
+
+
+def validar_espejos(datos):
+    """{año: tabla}, con al menos un año."""
+    if not isinstance(datos, dict) or not datos:
+        abort(400, "err.espejo_agua")
+    if not all(str(a).isdigit() and 2000 <= int(a) <= 2100 for a in datos):
+        abort(400, "err.espejo_anio")
+    return {str(a): validar_espejo(t) for a, t in datos.items()}
+
+
+def limites_heiz(valores):
+    if not isinstance(valores, list) or len(valores) != 3:
+        abort(400, "err.heizspiegel")
+    a, b, c = (numero(v) for v in valores)
+    if None in (a, b, c) or not 0 < a < b < c <= 10000:
+        abort(400, "err.heizspiegel")
+    return [a, b, c]
+
+
+def validar_heizspiegel(datos):
+    """Una edición: franjas de superficie ascendentes, la última sin límite, con los límites A, B y C de cada fuente."""
+    if not isinstance(datos, dict) or not isinstance(datos.get("franjas"), list) or not 1 <= len(datos["franjas"]) <= 8:
+        abort(400, "err.heizspiegel")
+    edicion, min_m2 = numero(datos.get("edicion"), int), numero(datos.get("min_m2"))
+    if edicion is None or not 2000 <= edicion <= 2100 or min_m2 is None or min_m2 < 0:
+        abort(400, "err.heizspiegel")
+    franjas, previo = [], min_m2
+    for i, franja in enumerate(datos["franjas"]):
+        if not isinstance(franja, dict) or not isinstance(franja.get("filas"), dict) or not franja["filas"] \
+                or not set(franja["filas"]) <= set(FUENTES_HEIZ):
+            abort(400, "err.heizspiegel")
+        hasta = numero(franja.get("hasta"))
+        if (hasta is None) != (i == len(datos["franjas"]) - 1) or (hasta is not None and hasta <= previo):
+            abort(400, "err.heizspiegel")
+        previo = hasta
+        filas = {}
+        for fuente, fila in franja["filas"].items():
+            if not isinstance(fila, dict):
+                abort(400, "err.heizspiegel")
+            filas[fuente] = {"kwh": limites_heiz(fila.get("kwh")), "costo": limites_heiz(fila.get("costo"))}
+        franjas.append({"hasta": hasta, "filas": filas})
+    return {"edicion": edicion, "min_m2": min_m2, "franjas": franjas}
+
+
+def validar_heizspiegels(datos):
+    """{año de facturación: edición}, con al menos un año."""
+    if not isinstance(datos, dict) or not datos:
+        abort(400, "err.heizspiegel")
+    if not all(str(a).isdigit() and 2000 <= int(a) <= 2100 for a in datos):
+        abort(400, "err.espejo_anio")
+    return {str(a): validar_heizspiegel(t) for a, t in datos.items()}
+
+
 @app.get("/api/config")
 def api_config():
     return jsonify(leer_config())
@@ -2030,6 +2175,17 @@ def api_guardar_config():
                 if mn is None or mx is None or not bajo <= mn < mx <= alto:
                     abort(400, error)
                 cfg[clave] = {"min": mn, "max": mx}
+        if "espejos_agua" in datos:
+            cfg["espejos_agua"] = validar_espejos(datos["espejos_agua"])
+        if datos.get("restaurar_espejo_2024"):
+            cfg["espejos_agua"]["2024"] = json.loads(json.dumps(CONFIG_DEFECTO["espejos_agua"]["2024"]))
+        if "heizspiegels" in datos:
+            cfg["heizspiegels"] = validar_heizspiegels(datos["heizspiegels"])
+        if datos.get("restaurar_heizspiegel"):
+            anio = str(datos["restaurar_heizspiegel"])
+            if anio not in CONFIG_DEFECTO["heizspiegels"]:
+                abort(400, "err.heizspiegel")
+            cfg["heizspiegels"][anio] = json.loads(json.dumps(CONFIG_DEFECTO["heizspiegels"][anio]))
         if "fecha_mudanza" in datos:
             v = str(datos["fecha_mudanza"] or "")
             if v:

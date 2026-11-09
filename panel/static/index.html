@@ -349,6 +349,16 @@
           </div>
           <div class="card mb-4">
             <div class="card-header d-flex align-items-center flex-wrap gap-2">
+              <span><i class="cil-fire me-2"></i><strong data-i18n="heiz.titulo"></strong> <span class="small text-body-secondary" id="mt-heiz-sub"></span></span>
+              <div class="btn-group btn-group-sm ms-auto" role="group" id="mt-heiz-vista">
+                <button type="button" class="btn btn-outline-secondary" data-vista="vivienda" data-i18n="heiz.vista_vivienda"></button>
+                <button type="button" class="btn btn-outline-secondary" data-vista="edificio" data-i18n="ene.edificio_titulo"></button>
+              </div>
+            </div>
+            <div id="mt-heiz"></div>
+          </div>
+          <div class="card mb-4">
+            <div class="card-header d-flex align-items-center flex-wrap gap-2">
               <strong data-i18n="ene.por_habitacion"></strong>
               <select class="form-select form-select-sm ms-auto" style="max-width:200px" id="mt-sala-periodo" data-i18n-aria="per.periodo"></select>
             </div>
@@ -462,6 +472,7 @@
       <!-- AGUA CALIENTE -->
       <section id="tab-agua" hidden>
         <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3 mb-4" id="ag-tarjetas"></div>
+        <div class="row g-3 mb-4" id="ag-estimacion"></div>
         <div class="card mb-4">
           <div class="card-header"><i class="cil-filter me-2"></i><strong data-i18n="filtros"></strong></div>
           <div class="card-body">
@@ -639,12 +650,51 @@
             <div class="row g-3 mb-3">
               <div class="col-6 col-md-3"><label class="form-label" for="v-m2-total" id="v-m2-total-titulo" data-i18n="viv.m2_casa"></label><input type="number" class="form-control" id="v-m2-total" min="0" step="0.1"></div>
               <div class="col-6 col-md-3 solo-dpto"><label class="form-label" for="v-m2-edificio" data-i18n="viv.m2_edificio"></label><input type="number" class="form-control" id="v-m2-edificio" min="0" step="0.1"></div>
+              <div class="col-6 col-md-3"><label class="form-label" for="v-personas" data-i18n="viv.personas"></label><input type="number" class="form-control" id="v-personas" min="1" max="20" step="1"></div>
+              <div class="col-12 col-md-3"><label class="form-label" for="v-energia" data-i18n="viv.energia"></label><select class="form-select" id="v-energia"></select></div>
             </div>
             <h3 class="h6" data-i18n="viv.habitaciones"></h3>
             <div class="row g-3 mb-4" id="v-m2-medidores"></div>
             <h3 class="h6" data-i18n="viv.facturas"></h3>
             <div class="table-responsive"><table class="table table-sm align-middle mb-3" id="v-facturas"></table></div>
             <button class="btn btn-primary" id="v-guardar" data-i18n="viv.guardar"></button>
+          </div>
+        </div>
+        <div class="card mb-4">
+          <div class="card-header"><i class="cil-drop me-2"></i><strong data-i18n="espejo.titulo"></strong></div>
+          <div class="card-body">
+            <p class="small text-body-secondary" data-i18n="espejo.ayuda"></p>
+            <p class="small text-body-secondary" data-i18n="espejo.ayuda_anios"></p>
+            <div class="row g-2 align-items-end mb-3">
+              <div class="col-6 col-md-2"><label class="form-label" for="e-anio" data-i18n="espejo.anio"></label><select class="form-select" id="e-anio"></select></div>
+              <div class="col-6 col-md-2"><label class="form-label" for="e-nuevo" data-i18n="espejo.nuevo_anio"></label><input type="number" class="form-control" id="e-nuevo" min="2000" max="2100" step="1"></div>
+              <div class="col-12 col-md-auto"><button class="btn btn-outline-primary" id="e-agregar" data-i18n="espejo.agregar"></button></div>
+            </div>
+            <div class="row g-4 mb-3" id="e-tablas"></div>
+            <div class="d-flex flex-wrap gap-2">
+              <button class="btn btn-primary" id="e-guardar" data-i18n="guardar"></button>
+              <button class="btn btn-outline-secondary" id="e-cargar" data-i18n="espejo.cargar"></button>
+              <button class="btn btn-outline-danger" id="e-borrar" data-i18n="espejo.borrar"></button>
+            </div>
+          </div>
+        </div>
+        <div class="card mb-4">
+          <div class="card-header"><i class="cil-fire me-2"></i><strong data-i18n="heiz.aj_titulo"></strong></div>
+          <div class="card-body">
+            <p class="small text-body-secondary" data-i18n="heiz.aj_ayuda"></p>
+            <div class="row g-2 align-items-end mb-3">
+              <div class="col-6 col-md-2"><label class="form-label" for="h-anio" data-i18n="heiz.anio_fact"></label><select class="form-select" id="h-anio"></select></div>
+              <div class="col-6 col-md-2"><label class="form-label" for="h-nuevo" data-i18n="espejo.nuevo_anio"></label><input type="number" class="form-control" id="h-nuevo" min="2000" max="2100" step="1"></div>
+              <div class="col-12 col-md-auto"><button class="btn btn-outline-primary" id="h-agregar" data-i18n="espejo.agregar"></button></div>
+              <div class="col-6 col-md-2"><label class="form-label" for="h-edicion" data-i18n="heiz.edicion"></label><span id="h-edicion-ayuda"></span><input type="number" class="form-control" id="h-edicion" min="2000" max="2100" step="1"></div>
+              <div class="col-6 col-md-2"><label class="form-label" for="h-min" data-i18n="heiz.min_m2"></label><input type="number" class="form-control" id="h-min" min="0" step="any"></div>
+            </div>
+            <div class="row g-4 mb-3" id="h-franjas"></div>
+            <div class="d-flex flex-wrap gap-2">
+              <button class="btn btn-primary" id="h-guardar" data-i18n="guardar"></button>
+              <button class="btn btn-outline-secondary" id="h-restaurar" data-i18n="heiz.restaurar"></button>
+              <button class="btn btn-outline-danger" id="h-borrar" data-i18n="espejo.borrar"></button>
+            </div>
           </div>
         </div>
       </section>
@@ -854,6 +904,22 @@ const I18N = {
     'agua.ayuda': 'El contador de agua caliente (Warmwasserzähler) suma siempre, no vuelve a 0 con cada período. Anotá el número que marca: los dígitos negros son los m³ y los rojos los decimales (ej.: negro 36 y rojo 912 → 36,912). El consumo se calcula solo y se muestra en litros.',
     'agua.ninguno': 'Todavía no hay contadores de agua caliente. Creá el primero con el formulario de abajo.',
     'agua.por_periodo': 'Consumo por período de liquidación', 'agua.en_periodo': 'en el período elegido', 'agua.por_dia': '{v} por día',
+    'agua.promedio_dia': 'Promedio diario', 'agua.estimacion_anual': 'Estimación anual', 'agua.comparacion': 'Comparación (A–D)',
+    'agua.base': 'Con {n} días de datos', 'agua.base_corta': 'Solo {n} días de datos: aproximado', 'agua.calculo_anual': 'promedio diario × 365', 'agua.por_anio': '{v} al año',
+    'agua.faltan_lecturas': 'Hacen falta dos lecturas con al menos un día de diferencia', 'agua.falta_personas': 'Indicá las personas del hogar en Ajustes', 'agua.sin_referencia': 'La tabla llega hasta 5 personas',
+    'agua.casa': 'Casa', 'agua.dpto': 'Departamento', 'agua.ref_dia': 'Referencia (B): hasta {v} L/día', 'agua.ref_anio': 'Referencia (B): hasta {v} m³/año', 'agua.ref': '{tipo} · personas: {n}',
+    'agua.cat_0': 'baja', 'agua.cat_1': 'media', 'agua.cat_2': 'elevada', 'agua.cat_3': 'demasiado alta',
+    'agua.m3_anio': 'm³ al año', 'agua.personas_col': 'Personas', 'espejo.titulo': 'Warmwasserspiegel (referencia de agua caliente)',
+    'espejo.ayuda': 'Límites de cada categoría en m³ por hogar y año. La categoría D es todo lo que supere a C. Cada valor debe ser mayor que el anterior de su fila.',
+    'espejo.cargar': 'Restaurar valores 2024', 'espejo.conf_cargar': '¿Reemplazar la tabla de 2024 por los valores originales?',
+        'heiz.titulo': 'Heizspiegel (comparación de calefacción)', 'heiz.tabla': 'Tabla', 'heiz.categoria': 'Categoría', 'heiz.referencia': 'Referencia (media)', 'heiz.tabla_val': 'Heizspiegel für Deutschland {e} (comparación con {a})', 'heiz.tabla_ayuda': 'El año del Heizspiegel es el de publicación y compara el consumo del año anterior: la edición 2025 sirve para la facturación 2024. Un período sin tabla propia usa la más reciente cargada.', 'heiz.ref_val': 'hasta {v}', 'heiz.sub_edificio': 'Edificio · {m} m² · {f}', 'heiz.sub_vivienda': 'Vivienda · {m} m² · {f}', 'heiz.falta_energia': 'Elegí la fuente de energía en Ajustes → Vivienda y facturas para ver la comparación.', 'heiz.falta_m2': 'Falta la superficie: cargala en Ajustes → Vivienda y facturas.', 'heiz.nota': 'Valores de co2online para el edificio completo; incluyen calefacción y agua caliente. Si tu factura cubre solo la calefacción, el resultado se ve mejor de lo que es. No sirve para comparar fuentes de energía ni para valorar un departamento por separado. El período en curso es una proyección al cierre; en un departamento, el edificio se estima con la relación entre tu vivienda y el edificio en el último año completo.', 'heiz.proyeccion': 'proyección', 'heiz.vista_vivienda': 'Vivienda', 'heiz.vs_edificio': 'vs. edificio', 'heiz.nota_vivienda': 'Datos de tu vivienda: €/m² es lo pagado dividido por la superficie. El Heizspiegel compara edificios completos, por eso esta vista no tiene categoría. El período en curso es una proyección, y uno incompleto por la mudanza cubre solo parte del año.', 'heiz.ref_titulo': 'Heizspiegel für Deutschland {e} (comparación con {a}) · {f} m²', 'heiz.kwh_col': 'kWh/m² al año', 'heiz.costo_col': '€/m² al año', 'heiz.energia': 'Energía', 'heiz.aj_titulo': 'Heizspiegel (referencia de calefacción)', 'heiz.aj_ayuda': 'Una tabla por año de facturación, con los límites A, B y C en kWh y € por m² y año para cada franja de superficie del edificio. Dejá vacía la fila de una fuente sin valores. Un año nuevo empieza como copia del elegido.', 'heiz.anio_fact': 'Año de facturación', 'heiz.edicion': 'Edición', 'heiz.min_m2': 'Superficie mínima (m²)', 'heiz.franja_hasta': 'Franja hasta (m²)', 'heiz.sin_limite': 'sin límite', 'heiz.conf_restaurar': '¿Reemplazar este año por los valores originales?', 'heiz.restaurar': 'Restaurar valores originales',
+    'viv.energia': 'Fuente de energía de la calefacción', 'viv.energia_ninguna': 'Sin elegir', 'err.heizspiegel': 'Revisá la tabla: cada fila completa, cada valor mayor que el anterior y las franjas en orden ascendente (la última, sin límite)',
+    'heiz.fuente.Erdgas': 'Gas natural', 'heiz.fuente.Heizöl': 'Gasóleo', 'heiz.fuente.Fernwärme': 'Calefacción urbana', 'heiz.fuente.Wärmepumpe': 'Bomba de calor', 'heiz.fuente.Holzpellets': 'Pellets',
+    'espejo.anio': 'Año', 'espejo.nuevo_anio': 'Año nuevo', 'espejo.agregar': 'Agregar año', 'espejo.borrar': 'Borrar este año', 'espejo.conf_borrar': '¿Borrar la tabla de este año?',
+    'espejo.ayuda_anios': 'Cargá una tabla por año: un año nuevo empieza como copia del elegido, ajustá los valores y guardá. Cada período usa la tabla del año en que cae la mayor parte; si ese año no tiene, la anterior más reciente.',
+    'err.espejo_anio': 'El año debe estar entre 2000 y 2100', 'agua.tabla_anio': 'tabla {v}', 'agua.categoria_periodo': 'Categoría (estimación anual)',
+    'err.espejo_agua': 'Revisá la tabla: cada valor debe ser mayor que 0 y mayor que el anterior de su fila',
+    'agua.nota_estimacion': 'Usa todas las lecturas desde la mudanza, sin importar el filtro de fechas. Referencia: Warmwasserspiegel de co2online, editable en Ajustes.', 'viv.personas': 'Personas en el hogar',
     'agua.reinicio': 'Contador nuevo o cambiado (empieza de nuevo)', 'agua.digitos': 'Negros = m³, rojos = decimales. Ej.: 36,912', 'agua.reinicio_ayuda': 'Marcala solo si cambiaron el contador y el número volvió a empezar. En el uso normal, dejala sin marcar.', 'med.reinicio_ayuda': 'Marcala solo si el aparato empezó un período nuevo y el número volvió a 0. En el uso normal, dejala sin marcar.', 'ref.titulo': 'Rangos recomendados', 'ref.min': 'mín. recomendado {v}', 'ref.max': 'máx. recomendado {v}',
     'ref.ayuda': 'Se dibujan como franja de referencia en el gráfico de cada magnitud. Habitual: 18–22 °C en ambientes de estar (el dormitorio suele ir más fresco, 16–18 °C) y 40–60 % de humedad: por encima aumenta el riesgo de moho.', 'err.temp_ref': 'La temperatura mínima tiene que ser menor que la máxima (−10 a 40 °C)',
     'err.humedad_ref': 'La humedad mínima tiene que ser menor que la máxima (0–100 %)', 'grafico.temperatura': 'Temperatura', 'grafico.humedad': 'Humedad', 'grafico.magnitud': 'Qué mostrar',
@@ -967,6 +1033,22 @@ const I18N = {
     'agua.ayuda': 'The hot water meter keeps adding up and does not go back to 0 each period. Enter the number it shows: the black digits are m³ and the red ones the decimals (e.g. black 36 and red 912 → 36.912). Consumption is calculated automatically and shown in litres.',
     'agua.ninguno': 'There are no hot water meters yet. Create the first one with the form below.',
     'agua.por_periodo': 'Consumption by billing period', 'agua.en_periodo': 'in the selected period', 'agua.por_dia': '{v} per day',
+    'agua.promedio_dia': 'Daily average', 'agua.estimacion_anual': 'Yearly estimate', 'agua.comparacion': 'Comparison (A–D)',
+    'agua.base': 'Based on {n} days of data', 'agua.base_corta': 'Only {n} days of data: approximate', 'agua.calculo_anual': 'daily average × 365', 'agua.por_anio': '{v} per year',
+    'agua.faltan_lecturas': 'Needs two readings at least one day apart', 'agua.falta_personas': 'Enter the number of people in Settings', 'agua.sin_referencia': 'The table only goes up to 5 people',
+    'agua.casa': 'House', 'agua.dpto': 'Apartment', 'agua.ref_dia': 'Reference (B): up to {v} L/day', 'agua.ref_anio': 'Reference (B): up to {v} m³/year', 'agua.ref': '{tipo} · people: {n}',
+    'agua.cat_0': 'low', 'agua.cat_1': 'medium', 'agua.cat_2': 'elevated', 'agua.cat_3': 'too high',
+    'agua.m3_anio': 'm³ per year', 'agua.personas_col': 'People', 'espejo.titulo': 'Warmwasserspiegel (hot water reference)',
+    'espejo.ayuda': 'Limit of each category in m³ per household and year. Category D is anything above C. Each value must be higher than the previous one in its row.',
+    'espejo.cargar': 'Restore 2024 values', 'espejo.conf_cargar': 'Replace the 2024 table with the original values?',
+        'heiz.titulo': 'Heizspiegel (heating comparison)', 'heiz.tabla': 'Table', 'heiz.categoria': 'Category', 'heiz.referencia': 'Reference (medium)', 'heiz.tabla_val': 'Heizspiegel für Deutschland {e} (compared with {a})', 'heiz.tabla_ayuda': 'The Heizspiegel year is the year of publication, and it compares the consumption of the previous year: the 2025 edition applies to 2024 billing. A period without its own table uses the most recent one loaded.', 'heiz.ref_val': 'up to {v}', 'heiz.sub_edificio': 'Building · {m} m² · {f}', 'heiz.sub_vivienda': 'Home · {m} m² · {f}', 'heiz.falta_energia': 'Choose the energy source in Settings → Home and bills to see the comparison.', 'heiz.falta_m2': 'The floor area is missing: enter it in Settings → Home and bills.', 'heiz.nota': 'co2online values for the whole building, including heating and hot water. If your bill only covers heating, the result looks better than it is. Not suitable for comparing energy sources or for rating a single apartment. The current period is a projection to its end; for an apartment, the building is estimated from the ratio between your home and the building in the last full year.', 'heiz.proyeccion': 'projection', 'heiz.vista_vivienda': 'Home', 'heiz.vs_edificio': 'vs. building', 'heiz.nota_vivienda': 'Figures for your home: €/m² is the amount paid divided by the floor area. The Heizspiegel compares whole buildings, so this view has no category. The current period is a projection, and one cut short by moving in covers only part of the year.', 'heiz.ref_titulo': 'Heizspiegel für Deutschland {e} (compared with {a}) · {f} m²', 'heiz.kwh_col': 'kWh/m² per year', 'heiz.costo_col': '€/m² per year', 'heiz.energia': 'Energy', 'heiz.aj_titulo': 'Heizspiegel (heating reference)', 'heiz.aj_ayuda': 'One table per billing year, with the A, B and C limits in kWh and € per m² and year for each building size band. Leave a row blank if that source has no values. A new year starts as a copy of the selected one.', 'heiz.anio_fact': 'Billing year', 'heiz.edicion': 'Edition', 'heiz.min_m2': 'Minimum area (m²)', 'heiz.franja_hasta': 'Band up to (m²)', 'heiz.sin_limite': 'no limit', 'heiz.conf_restaurar': 'Replace this year with the original values?', 'heiz.restaurar': 'Restore original values',
+    'viv.energia': 'Heating energy source', 'viv.energia_ninguna': 'Not chosen', 'err.heizspiegel': 'Check the table: every row complete, each value higher than the previous one, and bands in ascending order (the last one with no limit)',
+    'heiz.fuente.Erdgas': 'Natural gas', 'heiz.fuente.Heizöl': 'Heating oil', 'heiz.fuente.Fernwärme': 'District heating', 'heiz.fuente.Wärmepumpe': 'Heat pump', 'heiz.fuente.Holzpellets': 'Wood pellets',
+    'espejo.anio': 'Year', 'espejo.nuevo_anio': 'New year', 'espejo.agregar': 'Add year', 'espejo.borrar': 'Delete this year', 'espejo.conf_borrar': 'Delete the table for this year?',
+    'espejo.ayuda_anios': 'Add one table per year: a new year starts as a copy of the selected one, adjust the values and save. Each period uses the table of the year most of it falls in; if that year has none, the most recent earlier one.',
+    'err.espejo_anio': 'The year must be between 2000 and 2100', 'agua.tabla_anio': '{v} table', 'agua.categoria_periodo': 'Category (yearly estimate)',
+    'err.espejo_agua': 'Check the table: each value must be above 0 and higher than the previous one in its row',
+    'agua.nota_estimacion': 'Uses all readings since moving in, regardless of the date filter. Reference: Warmwasserspiegel by co2online, editable in Settings.', 'viv.personas': 'People in the household',
     'agua.reinicio': 'New or replaced meter (starts again)', 'agua.digitos': 'Black = m³, red = decimals. E.g. 36.912', 'agua.reinicio_ayuda': 'Tick it only if the meter was replaced and the number started again. Normally, leave it unticked.', 'med.reinicio_ayuda': 'Tick it only if the device started a new period and the number went back to 0. Normally, leave it unticked.', 'ref.titulo': 'Recommended ranges', 'ref.min': 'recommended min. {v}', 'ref.max': 'recommended max. {v}',
     'ref.ayuda': 'Drawn as a reference band on each chart. Typical: 18–22 °C in living areas (bedrooms are usually cooler, 16–18 °C) and 40–60 % humidity: above it the risk of mould rises.', 'err.temp_ref': 'Minimum temperature must be lower than maximum (−10 to 40 °C)',
     'err.humedad_ref': 'Minimum humidity must be lower than maximum (0–100 %)', 'grafico.temperatura': 'Temperature', 'grafico.humedad': 'Humidity', 'grafico.magnitud': 'What to show',
@@ -1080,6 +1162,22 @@ const I18N = {
     'agua.ayuda': 'Der Warmwasserzähler zählt immer weiter und beginnt nicht in jedem Zeitraum bei 0. Trage den angezeigten Stand ein: die schwarzen Ziffern sind m³, die roten die Nachkommastellen (z. B. schwarz 36 und rot 912 → 36,912). Der Verbrauch wird automatisch berechnet und in Litern angezeigt.',
     'agua.ninguno': 'Noch keine Warmwasserzähler. Lege den ersten mit dem Formular unten an.',
     'agua.por_periodo': 'Verbrauch nach Abrechnungszeitraum', 'agua.en_periodo': 'im gewählten Zeitraum', 'agua.por_dia': '{v} pro Tag',
+    'agua.promedio_dia': 'Tagesdurchschnitt', 'agua.estimacion_anual': 'Jahresprognose', 'agua.comparacion': 'Vergleich (A–D)',
+    'agua.base': 'Auf Basis von {n} Tagen', 'agua.base_corta': 'Nur {n} Tage Daten: ungefähr', 'agua.calculo_anual': 'Tagesdurchschnitt × 365', 'agua.por_anio': '{v} pro Jahr',
+    'agua.faltan_lecturas': 'Benötigt zwei Ablesungen mit mindestens einem Tag Abstand', 'agua.falta_personas': 'Trage die Personenzahl in den Einstellungen ein', 'agua.sin_referencia': 'Die Tabelle reicht nur bis 5 Personen',
+    'agua.casa': 'Haus', 'agua.dpto': 'Wohnung', 'agua.ref_dia': 'Referenz (B): bis {v} L/Tag', 'agua.ref_anio': 'Referenz (B): bis {v} m³/Jahr', 'agua.ref': '{tipo} · Personen: {n}',
+    'agua.cat_0': 'niedrig', 'agua.cat_1': 'mittel', 'agua.cat_2': 'erhöht', 'agua.cat_3': 'zu hoch',
+    'agua.m3_anio': 'm³ pro Jahr', 'agua.personas_col': 'Personen', 'espejo.titulo': 'Warmwasserspiegel (Warmwasser-Referenz)',
+    'espejo.ayuda': 'Grenzwert jeder Kategorie in m³ pro Haushalt und Jahr. Kategorie D ist alles über C. Jeder Wert muss größer sein als der vorherige in seiner Zeile.',
+    'espejo.cargar': 'Werte von 2024 wiederherstellen', 'espejo.conf_cargar': 'Tabelle 2024 durch die Originalwerte ersetzen?',
+        'heiz.titulo': 'Heizspiegel (Heizungsvergleich)', 'heiz.tabla': 'Tabelle', 'heiz.categoria': 'Kategorie', 'heiz.referencia': 'Referenz (mittel)', 'heiz.tabla_val': 'Heizspiegel für Deutschland {e} (Vergleich mit {a})', 'heiz.tabla_ayuda': 'Das Jahr des Heizspiegels ist das Erscheinungsjahr, verglichen wird der Verbrauch des Vorjahres: Die Ausgabe 2025 gilt für die Abrechnung 2024. Ein Zeitraum ohne eigene Tabelle nutzt die neueste geladene.', 'heiz.ref_val': 'bis {v}', 'heiz.sub_edificio': 'Gebäude · {m} m² · {f}', 'heiz.sub_vivienda': 'Wohnung · {m} m² · {f}', 'heiz.falta_energia': 'Wähle den Energieträger unter Einstellungen → Wohnung und Abrechnungen, um den Vergleich zu sehen.', 'heiz.falta_m2': 'Die Fläche fehlt: Trage sie unter Einstellungen → Wohnung und Abrechnungen ein.', 'heiz.nota': 'co2online-Werte für das gesamte Gebäude, einschließlich Heizung und Warmwasser. Deckt deine Abrechnung nur die Heizung ab, wirkt das Ergebnis besser, als es ist. Nicht geeignet, um Energieträger zu vergleichen oder eine einzelne Wohnung zu bewerten. Der laufende Zeitraum ist eine Prognose bis zum Ende; bei einer Wohnung wird das Gebäude über das Verhältnis zwischen Wohnung und Gebäude im letzten vollständigen Jahr geschätzt.', 'heiz.proyeccion': 'Prognose', 'heiz.vista_vivienda': 'Wohnung', 'heiz.vs_edificio': 'ggü. Gebäude', 'heiz.nota_vivienda': 'Werte deiner Wohnung: €/m² ist der bezahlte Betrag geteilt durch die Fläche. Der Heizspiegel vergleicht ganze Gebäude, daher hat diese Ansicht keine Kategorie. Der laufende Zeitraum ist eine Prognose, und ein durch den Einzug unvollständiger deckt nur einen Teil des Jahres ab.', 'heiz.ref_titulo': 'Heizspiegel für Deutschland {e} (Vergleich mit {a}) · {f} m²', 'heiz.kwh_col': 'kWh/m² pro Jahr', 'heiz.costo_col': '€/m² pro Jahr', 'heiz.energia': 'Energie', 'heiz.aj_titulo': 'Heizspiegel (Heizungsreferenz)', 'heiz.aj_ayuda': 'Eine Tabelle pro Abrechnungsjahr mit den Grenzwerten A, B und C in kWh und € pro m² und Jahr je Gebäudegröße. Lass die Zeile einer Quelle ohne Werte leer. Ein neues Jahr beginnt als Kopie des gewählten.', 'heiz.anio_fact': 'Abrechnungsjahr', 'heiz.edicion': 'Ausgabe', 'heiz.min_m2': 'Mindestfläche (m²)', 'heiz.franja_hasta': 'Klasse bis (m²)', 'heiz.sin_limite': 'ohne Grenze', 'heiz.conf_restaurar': 'Dieses Jahr durch die Originalwerte ersetzen?', 'heiz.restaurar': 'Originalwerte wiederherstellen',
+    'viv.energia': 'Energieträger der Heizung', 'viv.energia_ninguna': 'Nicht gewählt', 'err.heizspiegel': 'Prüfe die Tabelle: jede Zeile vollständig, jeder Wert größer als der vorherige und die Klassen aufsteigend (die letzte ohne Grenze)',
+    'heiz.fuente.Erdgas': 'Erdgas', 'heiz.fuente.Heizöl': 'Heizöl', 'heiz.fuente.Fernwärme': 'Fernwärme', 'heiz.fuente.Wärmepumpe': 'Wärmepumpe', 'heiz.fuente.Holzpellets': 'Holzpellets',
+    'espejo.anio': 'Jahr', 'espejo.nuevo_anio': 'Neues Jahr', 'espejo.agregar': 'Jahr hinzufügen', 'espejo.borrar': 'Dieses Jahr löschen', 'espejo.conf_borrar': 'Tabelle dieses Jahres löschen?',
+    'espejo.ayuda_anios': 'Lege eine Tabelle pro Jahr an: Ein neues Jahr beginnt als Kopie des gewählten, passe die Werte an und speichere. Jeder Zeitraum nutzt die Tabelle des Jahres, in das der größte Teil fällt; hat dieses keine, die letzte frühere.',
+    'err.espejo_anio': 'Das Jahr muss zwischen 2000 und 2100 liegen', 'agua.tabla_anio': 'Tabelle {v}', 'agua.categoria_periodo': 'Kategorie (Jahresprognose)',
+    'err.espejo_agua': 'Prüfe die Tabelle: Jeder Wert muss größer als 0 und größer als der vorherige in seiner Zeile sein',
+    'agua.nota_estimacion': 'Verwendet alle Ablesungen seit dem Einzug, unabhängig vom Datumsfilter. Referenz: Warmwasserspiegel von co2online, in den Einstellungen änderbar.', 'viv.personas': 'Personen im Haushalt',
     'agua.reinicio': 'Neuer oder getauschter Zähler (beginnt neu)', 'agua.digitos': 'Schwarz = m³, rot = Nachkommastellen. Z. B. 36,912', 'agua.reinicio_ayuda': 'Nur ankreuzen, wenn der Zähler getauscht wurde und neu zu zählen begann. Normalerweise nicht ankreuzen.', 'med.reinicio_ayuda': 'Nur ankreuzen, wenn das Gerät einen neuen Zeitraum begonnen hat und wieder bei 0 steht. Normalerweise nicht ankreuzen.', 'ref.titulo': 'Empfohlene Bereiche', 'ref.min': 'empfohlen min. {v}', 'ref.max': 'empfohlen max. {v}',
     'ref.ayuda': 'Wird in jedem Diagramm als Referenzbereich gezeigt. Üblich: 18–22 °C in Wohnräumen (Schlafzimmer meist kühler, 16–18 °C) und 40–60 % Luftfeuchte: darüber steigt das Schimmelrisiko.', 'err.temp_ref': 'Die minimale Temperatur muss kleiner als die maximale sein (−10 bis 40 °C)',
     'err.humedad_ref': 'Die minimale Luftfeuchte muss kleiner als die maximale sein (0–100 %)', 'grafico.temperatura': 'Temperatur', 'grafico.humedad': 'Luftfeuchte', 'grafico.magnitud': 'Anzeige',
@@ -3271,16 +3369,115 @@ function renderComparacion(lista, texto, grid) {
 // ======================================================================
 //  Agua caliente
 // ======================================================================
+let viviendaAgua = null, espejosAgua = {};
 async function mostrarAgua() {
-  try { await cargarMedidores(); } catch (err) { return aviso(err.message); }
+  try {
+    const [, d, cfg] = await Promise.all([cargarMedidores(), api('/api/vivienda'), api('/api/config')]);
+    viviendaAgua = d.vivienda;
+    espejosAgua = cfg.espejos_agua;
+  } catch (err) { return aviso(err.message); }
   renderAgua();
+}
+
+const widgetAgua = (titulo, valor, sub, color) => `<div class="col-6 col-lg-3"><div class="card h-100" style="border-top:3px solid ${color}">
+  <div class="card-body py-3"><div class="small text-body-secondary text-truncate">${titulo}</div>
+  <div class="fs-4 fw-semibold tabular">${valor}</div><div class="small text-body-secondary">${sub}</div></div></div></div>`;
+
+const COLORES_ESPEJO = ['#4faa4c', '#9ccb7e', '#f2a53a', '#e4514f'];
+const MIN_DIAS_ESTIMACION = 30;
+
+// Promedio con las lecturas desde la mudanza, opcionalmente dentro de un rango. Menos de un día de datos no alcanza para extrapolar.
+function promedioAgua(m, desde = -Infinity, hasta = Infinity) {
+  const s = serieAcum(m.id);
+  if (s.length < 2) return null;
+  const mudanza = estado.fecha_mudanza ? new Date(estado.fecha_mudanza + 'T00:00:00').getTime() : 0;
+  const ini = Math.max(s[0].x, mudanza, desde), fin = Math.min(s[s.length - 1].x, hasta), dias = (fin - ini) / DIA;
+  return dias >= 1 ? { dias, porDia: (acumEn(s, fin) - acumEn(s, ini)) / dias } : null;
+}
+
+// Tabla que corresponde a un año: la más reciente que no sea posterior; si no hay ninguna, la más antigua
+function espejoDeAnio(anio) {
+  const anios = Object.keys(espejosAgua).map(Number).sort((a, b) => a - b);
+  const elegido = anios.filter(a => a <= anio).pop() ?? anios[0];
+  return elegido == null ? null : { anio: elegido, tabla: espejosAgua[elegido] };
+}
+
+// Límites para este hogar en un año, o null si falta el número de personas o supera las 5 de la tabla
+function limitesEspejoAgua(anio = new Date().getFullYear()) {
+  const personas = viviendaAgua?.personas, e = espejoDeAnio(anio);
+  return personas && e ? e.tabla[viviendaAgua.es_departamento ? 'departamento' : 'casa']?.[personas - 1] || null : null;
+}
+
+const categoriaEspejo = (m3, limites) => { const i = limites.findIndex(l => m3 <= l); return i < 0 ? 3 : i; };
+
+// Fila con la categoría de cada período: su promedio llevado a un año, contra la tabla del año en que cae la mayor parte del período
+function htmlCategoriasPeriodos(datos, pers) {
+  if (!datos.every(x => enLitros(x.m))) return '';
+  const celdas = pers.map(p => {
+    const [ini, fin] = limitesPer(p), anio = new Date((ini + fin) / 2).getFullYear(), limites = limitesEspejoAgua(anio);
+    const proms = datos.map(x => promedioAgua(x.m, ini, fin));
+    if (!limites || proms.some(x => !x)) return '<td class="text-end text-body-secondary">–</td>';
+    const m3 = proms.reduce((s, x) => s + x.porDia, 0) * 365, cat = categoriaEspejo(m3, limites);
+    const aprox = Math.min(...proms.map(x => x.dias)) < MIN_DIAS_ESTIMACION ? '≈ ' : '';
+    return `<td class="text-end"><span class="badge" style="background:${COLORES_ESPEJO[cat]};color:#10242c">${'ABCD'[cat]}</span> ${aprox}${fmtValor(m3, 1)} m³<div class="small text-body-secondary">${t('agua.tabla_anio', { v: espejoDeAnio(anio).anio })}</div></td>`;
+  });
+  return celdas.some(c => c.includes('badge')) ? `<tr><td>${t('agua.categoria_periodo')}</td>${celdas.join('')}</tr>` : '';
+}
+
+function htmlComparacionAgua(m3) {
+  const dpto = !!viviendaAgua?.es_departamento, personas = viviendaAgua?.personas, limites = limitesEspejoAgua();
+  if (!limites) return widgetAgua(t('agua.comparacion'), '–', t(personas ? 'agua.sin_referencia' : 'agua.falta_personas'), 'var(--cui-secondary)');
+  const cat = categoriaEspejo(m3, limites);
+  const escala = `A ≤ ${fmtValor(limites[0], 1)} · B ≤ ${fmtValor(limites[1], 1)} · C ≤ ${fmtValor(limites[2], 1)} · D > ${fmtValor(limites[2], 1)} m³`;
+  return widgetAgua(t('agua.comparacion'), `${'ABCD'[cat]} · ${t('agua.cat_' + cat)}`,
+    `${t('agua.ref', { tipo: t(dpto ? 'agua.dpto' : 'agua.casa'), n: personas })}<br>${escala}`, COLORES_ESPEJO[cat]);
+}
+
+// Tabla de referencia del tipo de vivienda propio, junto a las tarjetas de los contadores (en el celular, debajo)
+function htmlTablaEspejoAgua() {
+  const dpto = !!viviendaAgua?.es_departamento, espejo = espejoDeAnio(new Date().getFullYear()), filas = espejo?.tabla[dpto ? 'departamento' : 'casa'];
+  if (!filas) return '';
+  const cab = [...'ABCD'].map((c, i) => `<th class="text-end" style="background:${COLORES_ESPEJO[i]} !important;color:#10242c !important">${c}</th>`).join('');
+  return `<div class="col"><div class="card h-100">
+    <div class="card-header"><strong>Warmwasserspiegel ${espejo.anio}</strong> <span class="small text-body-secondary">· ${t(dpto ? 'agua.dpto' : 'agua.casa')} · ${t('agua.m3_anio')}</span></div>
+    <div class="table-responsive"><table class="table table-sm align-middle mb-0 tabular"><thead><tr><th>${t('agua.personas_col')}</th>${cab}</tr></thead><tbody>` +
+    filas.map((f, i) => `<tr class="${viviendaAgua?.personas === i + 1 ? 'table-active fw-semibold' : ''}"><th scope="row" class="fw-normal">${i + 1}</th>` +
+      f.map(v => `<td class="text-end text-nowrap">≤ ${fmtValor(v, 1)}</td>`).join('') + `<td class="text-end text-nowrap">&gt; ${fmtValor(f[2], 1)}</td></tr>`).join('') +
+    '</tbody></table></div></div></div>';
+}
+
+function renderEstimacionAgua() {
+  const filas = medidoresAgua.map(m => ({ m, prom: promedioAgua(m) }));
+  // El total del hogar solo vale si todos los contadores tienen datos y están en m³
+  const sumable = filas.length > 0 && filas.every(x => x.prom && enLitros(x.m));
+  let html = '';
+  if (sumable) {
+    const porDia = filas.reduce((s, x) => s + x.prom.porDia, 0), m3 = porDia * 365;
+    const dias = Math.min(...filas.map(x => x.prom.dias));
+    // Referencia: el límite de la categoría B ("mittel") de la tabla
+    const limiteB = limitesEspejoAgua()?.[1];
+    const refDia = limiteB ? `<br>${t('agua.ref_dia', { v: fmtValor(limiteB * 1000 / 365, 0) })}` : '';
+    const refAnio = limiteB ? `<br>${t('agua.ref_anio', { v: fmtValor(limiteB, 1) })}` : '';
+    html += widgetAgua(t('agua.promedio_dia'), fmtConsumo(porDia, filas[0].m),
+      t(dias < MIN_DIAS_ESTIMACION ? 'agua.base_corta' : 'agua.base', { n: Math.round(dias) }) + refDia, 'var(--cui-primary)');
+    html += widgetAgua(t('agua.estimacion_anual'), `${fmtValor(m3, 1)} m³`, t('agua.calculo_anual') + refAnio, 'var(--cui-primary)');
+    html += htmlComparacionAgua(m3);
+  }
+  if (filas.length > 1 || !sumable) {
+    html += filas.map(({ m, prom }) => prom
+      ? widgetAgua(esc(m.nombre), t('agua.por_anio', { v: `${fmtValor(prom.porDia * 365, 1)} ${esc(unidadDe(m))}` }), t('agua.por_dia', { v: fmtConsumo(prom.porDia, m) }), colorMed[m.id])
+      : widgetAgua(esc(m.nombre), '–', t('agua.faltan_lecturas'), colorMed[m.id])).join('');
+  }
+  if (filas.length) html += `<div class="col-12"><p class="small text-body-secondary mb-0">${t('agua.nota_estimacion')}</p></div>`;
+  $('#ag-estimacion').innerHTML = html;
 }
 
 function renderAgua() {
   const ahoraLocal = isoLocal(new Date()).slice(0, 16);
-  $('#ag-tarjetas').innerHTML = medidoresAgua.length ? medidoresAgua.map(m => htmlTarjetaMedidor(m, ahoraLocal)).join('')
+  $('#ag-tarjetas').innerHTML = medidoresAgua.length ? medidoresAgua.map(m => htmlTarjetaMedidor(m, ahoraLocal)).join('') + htmlTablaEspejoAgua()
     : `<div class="col-12 w-100"><div class="card"><div class="card-body text-body-secondary">${t('agua.ninguno')}</div></div></div>`;
   if ($('#ag-editando').value) { $('#ag-titulo').textContent = t('agua.editar'); $('#ag-guardar').textContent = t('guardar'); }
+  renderEstimacionAgua();
   const csv = paramsRango('#ag-desde', '#ag-hasta');
   csv.set('tipo', 'agua_caliente');
   $('#ag-descargar').href = '/api/consumo.csv?' + csv + '&idioma=' + idioma;
@@ -3296,15 +3493,12 @@ function renderAgua() {
   });
 
   // Resumen
-  const widget = (titulo, valor, sub, color) => `<div class="col-6 col-lg-3"><div class="card h-100" style="border-top:3px solid ${color}">
-    <div class="card-body py-3"><div class="small text-body-secondary text-truncate">${titulo}</div>
-    <div class="fs-4 fw-semibold tabular">${valor}</div><div class="small text-body-secondary">${sub}</div></div></div></div>`;
   let html = '';
   if (datos.length > 1 && datos.every(x => enLitros(x.m))) {
     const total = datos.reduce((s, x) => s + x.consumo, 0), totalDia = datos.reduce((s, x) => s + (x.porDia || 0), 0);
-    html += widget(t('cons.total_todos'), fmtConsumo(total, datos[0].m), t('agua.por_dia', { v: fmtConsumo(totalDia, datos[0].m) }), 'var(--cui-primary)');
+    html += widgetAgua(t('cons.total_todos'), fmtConsumo(total, datos[0].m), t('agua.por_dia', { v: fmtConsumo(totalDia, datos[0].m) }), 'var(--cui-primary)');
   }
-  html += datos.map(x => widget(esc(x.m.nombre), fmtConsumo(x.consumo, x.m),
+  html += datos.map(x => widgetAgua(esc(x.m.nombre), fmtConsumo(x.consumo, x.m),
     x.porDia == null ? t('agua.en_periodo') : t('agua.por_dia', { v: fmtConsumo(x.porDia, x.m) }), colorMed[x.m.id])).join('');
   $('#ag-resumen').innerHTML = html;
 
@@ -3358,7 +3552,7 @@ function renderAgua() {
         if (!x.s.length || x.s[x.s.length - 1].x < ini || x.s[0].x > fin) return '<td class="text-end text-body-secondary">–</td>';
         const incompleto = fin < hoy && x.s[x.s.length - 1].x < fin;
         return `<td class="text-end ${incompleto ? 'fst-italic text-body-secondary' : 'fw-semibold'}">${fmtConsumo(acumEn(x.s, fin) - acumEn(x.s, ini), x.m)}${incompleto ? ` <span class="badge text-bg-warning">${t('per.incompleto')}</span>` : ''}</td>`;
-      }).join('') + '</tr>').join('') + '</tbody>';
+      }).join('') + '</tr>').join('') + htmlCategoriasPeriodos(datos, pers) + '</tbody>';
   }
 
   // Historial
@@ -3567,10 +3761,95 @@ function unidadesProyectadas() {
   return proy.every(x => x != null) ? { periodo: per.id, unidades: proy.reduce((a, b) => a + b, 0) } : null;
 }
 
-let datosEnergia = null;
+let datosEnergia = null, heizspiegels = {};
+const FUENTES_HEIZ = ['Erdgas', 'Heizöl', 'Fernwärme', 'Wärmepumpe', 'Holzpellets'];
+const COLORES_HEIZ = ['#4faa4c', '#f2c81e', '#f2a53a', '#e4514f'];
+
+// Tabla que corresponde a un año de facturación: la más reciente que no sea posterior; si no hay ninguna, la más antigua
+function heizspiegelDeAnio(anio) {
+  const anios = Object.keys(heizspiegels).map(Number).sort((a, b) => a - b);
+  const elegido = anios.filter(a => a <= anio).pop() ?? anios[0];
+  return elegido == null ? null : { ...heizspiegels[elegido], anio: elegido };
+}
+const franjaHeiz = (tabla, m2) => !m2 || m2 < tabla.min_m2 ? null : tabla.franjas.find(f => f.hasta == null || m2 <= f.hasta) || null;
+function etiquetaFranja(tabla, franja) {
+  const i = tabla.franjas.indexOf(franja), desde = i ? tabla.franjas[i - 1].hasta : tabla.min_m2;
+  return franja.hasta == null ? `> ${fmtValor(desde, 0)}` : `${fmtValor(desde, 0)}–${fmtValor(franja.hasta, 0)}`;
+}
+
+// Un departamento se compara por el edificio completo: es lo que indica el Heizspiegel.
+// El período en curso usa la proyección al cierre; en un departamento se lleva al edificio con la relación vivienda/edificio del último año completo.
+function valorHeizspiegel(p, d, periodosE) {
+  if (!p.en_curso) return d.es_departamento ? p.edificio?.kwh_m2 : (p.parcial_mudanza ? null : p.kwh_m2);
+  if (p.kwhFin == null || !d.m2_vivienda) return null;
+  const propio = p.kwhFin / d.m2_vivienda;
+  if (!d.es_departamento) return propio;
+  const ref = periodosE.filter(x => !x.en_curso && !x.parcial_mudanza && x.kwh_m2 && x.edificio?.kwh_m2).pop();
+  return ref ? propio * ref.edificio.kwh_m2 / ref.kwh_m2 : null;
+}
+
+// Vista de la vivienda: sus propios valores, sin categoría, porque las tablas del Heizspiegel son para edificios completos
+function renderHeizVivienda(periodosE, d) {
+  const m2 = d.m2_vivienda;
+  $('#mt-heiz-sub').textContent = m2 ? `· ${fmtValor(m2, 1)} m²` : '';
+  if (!m2) return $('#mt-heiz').innerHTML = `<div class="card-body text-body-secondary">${t('heiz.falta_m2')} <a href="#ajustes">${t('ene.ir_ajustes')}</a></div>`;
+  const filas = periodosE.slice().reverse().map(p => {
+    const kwh = p.en_curso ? (p.kwhFin == null ? null : p.kwhFin / m2) : p.kwh_m2;
+    const euros = p.en_curso ? (p.costoFin == null ? null : p.costoFin / m2) : (p.pagado == null ? null : p.pagado / m2);
+    if (kwh == null && euros == null) return '';
+    const dif = p.edificio?.diferencia, aprox = p.en_curso || p.estimado ? '≈ ' : '';
+    const estado = p.en_curso ? ` <span class="badge text-bg-info">${t('heiz.proyeccion')}</span>` : p.parcial_mudanza ? ` <span class="badge text-bg-warning">${t('per.incompleto')}</span>` : '';
+    return `<tr><td>${esc(p.nombre)}${estado}</td><td class="text-end fw-semibold">${kwh == null ? '–' : aprox + fmtValor(kwh, 1)}</td>
+      <td class="text-end">${euros == null ? '–' : (p.en_curso ? '≈ ' : '') + fmtValor(euros, 2)}</td>
+      <td class="text-end">${dif == null ? '–' : `<span class="fw-semibold ${dif > 0 ? 'text-danger' : 'text-success'}">${fmtPct(dif)}</span>`}</td></tr>`;
+  }).join('');
+  $('#mt-heiz').innerHTML = `<div class="table-responsive"><table class="table table-hover align-middle mb-0 tabular"><thead><tr><th>${t('per.periodo')}</th><th class="text-end">kWh/m²</th><th class="text-end">€/m²</th><th class="text-end">${t('heiz.vs_edificio')}</th></tr></thead><tbody>${filas || `<tr><td colspan="4" class="text-center text-body-secondary py-3">–</td></tr>`}</tbody></table></div>
+    <div class="card-body border-top small text-body-secondary">${t('heiz.nota_vivienda')}</div>`;
+}
+
+let vistaHeiz = 'vivienda', datosHeiz = null;
+function renderHeizspiegel(periodosE, d) {
+  datosHeiz = [periodosE, d];
+  $('#mt-heiz-vista').hidden = !d.es_departamento;
+  document.querySelectorAll('#mt-heiz-vista button').forEach(b => b.classList.toggle('active', b.dataset.vista === vistaHeiz));
+  if (d.es_departamento && vistaHeiz === 'vivienda') return renderHeizVivienda(periodosE, d);
+  const m2 = d.es_departamento ? d.m2_edificio : d.m2_vivienda;
+  const fuente = d.energia ? t('heiz.fuente.' + d.energia) : '';
+  $('#mt-heiz-sub').textContent = m2 && d.energia ? `· ${t(d.es_departamento ? 'heiz.sub_edificio' : 'heiz.sub_vivienda', { m: fmtValor(m2, 1), f: fuente })}` : '';
+  const aviso = clave => `<div class="card-body text-body-secondary">${t(clave)} <a href="#ajustes">${t('ene.ir_ajustes')}</a></div>`;
+  if (!d.energia) return $('#mt-heiz').innerHTML = aviso('heiz.falta_energia');
+  if (!m2) return $('#mt-heiz').innerHTML = aviso('heiz.falta_m2');
+  const filas = periodosE.filter(p => !p.en_curso || valorHeizspiegel(p, d, periodosE) != null).reverse().map(p => {
+    const anio = new Date((new Date(p.inicio).getTime() + new Date(p.fin).getTime()) / 2).getFullYear();
+    const valor = valorHeizspiegel(p, d, periodosE);
+    const tabla = heizspiegelDeAnio(anio), franja = tabla && franjaHeiz(tabla, m2), lim = franja?.filas[d.energia]?.kwh;
+    const cat = valor != null && lim ? categoriaEspejo(valor, lim) : null;
+    return `<tr><td>${esc(p.nombre)}${p.en_curso ? ` <span class="badge text-bg-info">${t('heiz.proyeccion')}</span>` : ''}</td><td>${tabla ? t('heiz.tabla_val', { e: tabla.edicion, a: tabla.anio }) : '–'}</td>
+      <td class="text-end fw-semibold">${valor == null ? '–' : (p.en_curso || (!d.es_departamento && p.estimado) ? '≈ ' : '') + fmtValor(valor, 1)}</td>
+      <td>${cat == null ? '–' : `<span class="badge" style="background:${COLORES_HEIZ[cat]};color:#10242c">${t('agua.cat_' + cat)}</span>`}</td>
+      <td class="text-end">${lim ? t('heiz.ref_val', { v: fmtValor(lim[1], 0) }) : '–'}</td></tr>`;
+  }).join('');
+  const ultima = heizspiegelDeAnio(Infinity), franja = ultima && franjaHeiz(ultima, m2);
+  const celdas = (v, dec) => v.map(x => `<td class="text-end text-nowrap">≤ ${fmtValor(x, dec)}</td>`).join('') + `<td class="text-end text-nowrap">&gt; ${fmtValor(v[2], dec)}</td>`;
+  const cab = COLORES_HEIZ.map((c, i) => `<th class="text-end" style="background:${c} !important;color:#10242c !important">${t('agua.cat_' + i)}</th>`).join('');
+  const referencia = franja ? `<div class="card-body border-top pb-2"><strong class="small">${t('heiz.ref_titulo', { e: ultima.edicion, a: ultima.anio, f: etiquetaFranja(ultima, franja) })}</strong>${iconoAyuda(t('heiz.tabla_ayuda'))}</div>
+    <div class="table-responsive"><table class="table table-sm align-middle mb-0 tabular"><thead><tr><th rowspan="2">${t('heiz.energia')}</th><th colspan="4" class="text-center">${t('heiz.kwh_col')}</th><th colspan="4" class="text-center">${t('heiz.costo_col')}</th></tr><tr>${cab}${cab}</tr></thead><tbody>` +
+    FUENTES_HEIZ.filter(f => franja.filas[f]).map(f => `<tr class="${f === d.energia ? 'table-active fw-semibold' : ''}"><th scope="row" class="fw-normal text-nowrap">${t('heiz.fuente.' + f)}</th>${celdas(franja.filas[f].kwh, 0)}${celdas(franja.filas[f].costo, 2)}</tr>`).join('') + '</tbody></table></div>' : '';
+  $('#mt-heiz').innerHTML = `<div class="table-responsive"><table class="table table-hover align-middle mb-0 tabular"><thead><tr><th>${t('per.periodo')}</th><th>${t('heiz.tabla')}${iconoAyuda(t('heiz.tabla_ayuda'))}</th><th class="text-end">kWh/m²</th><th>${t('heiz.categoria')}</th><th class="text-end">${t('heiz.referencia')}</th></tr></thead><tbody>${filas || `<tr><td colspan="5" class="text-center text-body-secondary py-3">–</td></tr>`}</tbody></table></div>
+    ${referencia}<div class="card-body border-top small text-body-secondary">${t('heiz.nota')}</div>`;
+}
+
+$('#mt-heiz-vista').addEventListener('click', e => {
+  const b = e.target.closest('[data-vista]');
+  if (!b || !datosHeiz) return;
+  vistaHeiz = b.dataset.vista;
+  renderHeizspiegel(...datosHeiz);
+});
 
 async function cargarEnergia() {
-  const d = datosEnergia = await api('/api/energia');
+  const [d, cfg] = await Promise.all([api('/api/energia'), api('/api/config')]);
+  datosEnergia = d;
+  heizspiegels = cfg.heizspiegels;
   const conDatos = d.periodos.some(p => p.kwh != null);
   $('#mt-energia-vacio').hidden = conDatos;
   $('#mt-energia-vacio .card-body').innerHTML = `<p class="text-body-secondary mb-0">${t('ene.vacio')} <a href="#ajustes">${t('ene.ir_ajustes')}</a></p>`;
@@ -3583,6 +3862,7 @@ async function cargarEnergia() {
   });
   renderKpiEnergia(periodosE);
   renderAnual(periodosE, d.es_departamento);
+  renderHeizspiegel(periodosE, d);
   const conKwh = periodosE.filter(p => p.kwh != null);
   const previo = $('#mt-sala-periodo').value;
   $('#mt-sala-periodo').innerHTML = conKwh.slice().reverse().map(p => `<option value="${esc(p.id)}">${esc(p.nombre)}</option>`).join('');
@@ -3748,6 +4028,8 @@ async function cargarVivienda() {
   $('#v-es-dpto').checked = v.es_departamento;
   $('#v-m2-total').value = valor(v.m2_total);
   $('#v-m2-edificio').value = valor(v.m2_edificio);
+  $('#v-personas').value = valor(v.personas);
+  $('#v-energia').innerHTML = `<option value="">${t('viv.energia_ninguna')}</option>` + FUENTES_HEIZ.map(f => `<option value="${f}"${f === v.energia ? ' selected' : ''}>${t('heiz.fuente.' + f)}</option>`).join('');
   $('#v-m2-medidores').innerHTML = d.medidores.length ? d.medidores.map(m => `<div class="col-6 col-md-3"><label class="form-label small">${esc(m.nombre)}
       <div class="input-group input-group-sm"><input type="number" class="form-control" min="0" step="0.1" data-m2="${esc(m.id)}" value="${esc(valor(v.m2_medidores[m.id]))}"><span class="input-group-text">m²</span></div></label></div>`).join('')
     : `<div class="col-12 text-body-secondary small">${t('cons.sin_medidores')}</div>`;
@@ -3766,9 +4048,144 @@ $('#v-guardar').addEventListener('click', async () => {
   document.querySelectorAll('#v-facturas input').forEach(i => { (facturas[i.dataset.periodo] ??= {})[i.dataset.campo] = i.value; });
   document.querySelectorAll('#v-m2-medidores input').forEach(i => { m2_medidores[i.dataset.m2] = i.value; });
   try {
-    await api('/api/vivienda', { method: 'PUT', body: { es_departamento: $('#v-es-dpto').checked, m2_total: $('#v-m2-total').value, m2_edificio: $('#v-m2-edificio').value, m2_medidores, facturas } });
+    await api('/api/vivienda', { method: 'PUT', body: { es_departamento: $('#v-es-dpto').checked, m2_total: $('#v-m2-total').value, m2_edificio: $('#v-m2-edificio').value, personas: $('#v-personas').value, energia: $('#v-energia').value, m2_medidores, facturas } });
     aviso(t('aj.guardados'), 'success');
   } catch (err) { aviso(err.message); }
+});
+
+// Copia de trabajo de las tablas: los cambios de cada año se conservan al cambiar de año hasta guardar
+let espejosEdit = {}, anioEspejo = null;
+function usarEspejos(espejos) {
+  espejosAgua = espejos;
+  espejosEdit = JSON.parse(JSON.stringify(espejos));
+  if (!espejosEdit[anioEspejo]) anioEspejo = Object.keys(espejosEdit).pop();
+  renderEspejoAjustes();
+}
+async function cargarEspejoAjustes() {
+  usarEspejos((await api('/api/config')).espejos_agua);
+}
+function leerFormEspejo() {
+  document.querySelectorAll('#e-tablas input').forEach(i => { espejosEdit[anioEspejo][i.dataset.tipo][i.dataset.fila][i.dataset.col] = i.value; });
+}
+function renderEspejoAjustes() {
+  const anios = Object.keys(espejosEdit);
+  $('#e-anio').innerHTML = anios.map(a => `<option value="${a}"${a === anioEspejo ? ' selected' : ''}>${a}</option>`).join('');
+  $('#e-cargar').hidden = anioEspejo !== '2024';
+  $('#e-borrar').disabled = anios.length < 2;
+  $('#e-tablas').innerHTML = [['casa', 'agua.casa'], ['departamento', 'agua.dpto']].map(([tipo, clave]) => `<div class="col-12 col-xl-6">
+    <h3 class="h6">${t(clave)}</h3>
+    <div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>${t('agua.personas_col')}</th><th>A ≤</th><th>B ≤</th><th>C ≤</th></tr></thead><tbody>` +
+    espejosEdit[anioEspejo][tipo].map((f, i) => `<tr><th scope="row" class="fw-normal">${i + 1}</th>` + f.map((v, j) => `<td><input type="number" class="form-control form-control-sm text-end" min="0" step="any" data-tipo="${tipo}" data-fila="${i}" data-col="${j}" value="${v}" aria-label="${esc(`${t(clave)} ${i + 1} ${'ABC'[j]}`)}"></td>`).join('') + '</tr>').join('') +
+    '</tbody></table></div></div>').join('');
+}
+async function guardarEspejos(body) {
+  try {
+    usarEspejos((await api('/api/config', { method: 'PUT', body })).espejos_agua);
+    aviso(t('aj.guardados'), 'success');
+  } catch (err) { aviso(err.message); }
+}
+$('#e-anio').addEventListener('change', e => {
+  leerFormEspejo();
+  anioEspejo = e.target.value;
+  renderEspejoAjustes();
+});
+$('#e-agregar').addEventListener('click', () => {
+  const anio = $('#e-nuevo').value.trim();
+  if (!/^\d{4}$/.test(anio) || anio < 2000 || anio > 2100) return aviso(t('err.espejo_anio'));
+  leerFormEspejo();
+  if (!espejosEdit[anio]) espejosEdit[anio] = JSON.parse(JSON.stringify(espejosEdit[anioEspejo]));
+  anioEspejo = anio;
+  $('#e-nuevo').value = '';
+  renderEspejoAjustes();
+});
+$('#e-guardar').addEventListener('click', async () => {
+  leerFormEspejo();
+  if (await confirmar(t('conf.ajustes'))) await guardarEspejos({ espejos_agua: espejosEdit });
+});
+$('#e-cargar').addEventListener('click', async () => {
+  if (await confirmar(t('espejo.conf_cargar'))) await guardarEspejos({ restaurar_espejo_2024: true });
+});
+$('#e-borrar').addEventListener('click', async () => {
+  if (!await confirmar(t('espejo.conf_borrar'), { detalle: anioEspejo, peligro: true })) return;
+  leerFormEspejo();
+  const restantes = { ...espejosEdit };
+  delete restantes[anioEspejo];
+  await guardarEspejos({ espejos_agua: restantes });
+});
+
+// Heizspiegel en Ajustes: copia de trabajo, igual que las tablas de agua caliente
+let heizEdit = {}, anioHeiz = null;
+function usarHeiz(col) {
+  heizspiegels = col;
+  heizEdit = JSON.parse(JSON.stringify(col));
+  if (!heizEdit[anioHeiz]) anioHeiz = Object.keys(heizEdit).pop();
+  renderHeizAjustes();
+}
+async function cargarHeizAjustes() {
+  usarHeiz((await api('/api/config')).heizspiegels);
+}
+function leerFormHeiz() {
+  const e = heizEdit[anioHeiz];
+  e.edicion = $('#h-edicion').value;
+  e.min_m2 = $('#h-min').value;
+  document.querySelectorAll('#h-franjas [data-hasta]').forEach(i => { e.franjas[i.dataset.hasta].hasta = i.value === '' ? null : i.value; });
+  e.franjas.forEach((f, i) => {
+    f.filas = {};
+    FUENTES_HEIZ.forEach(fuente => {
+      const v = c => [...document.querySelectorAll(`#h-franjas input[data-franja="${i}"][data-fuente="${fuente}"][data-campo="${c}"]`)].map(x => x.value);
+      if ([...v('kwh'), ...v('costo')].some(x => x !== '')) f.filas[fuente] = { kwh: v('kwh'), costo: v('costo') };
+    });
+  });
+}
+function renderHeizAjustes() {
+  const anios = Object.keys(heizEdit), e = heizEdit[anioHeiz];
+  $('#h-anio').innerHTML = anios.map(a => `<option value="${a}"${a === anioHeiz ? ' selected' : ''}>${a}</option>`).join('');
+  $('#h-edicion').value = e.edicion;
+  $('#h-edicion-ayuda').innerHTML = iconoAyuda(t('heiz.tabla_ayuda'));
+  $('#h-min').value = e.min_m2;
+  $('#h-restaurar').hidden = !['2023', '2024'].includes(anioHeiz);
+  $('#h-borrar').disabled = anios.length < 2;
+  const entrada = (i, fuente, campo, v) => [0, 1, 2].map(j => `<td><input type="number" class="form-control form-control-sm text-end px-1" style="min-width:58px" min="0" step="any" data-franja="${i}" data-fuente="${fuente}" data-campo="${campo}" value="${v?.[j] ?? ''}" aria-label="${esc(`${fuente} ${campo} ${'ABC'[j]}`)}"></td>`).join('');
+  $('#h-franjas').innerHTML = e.franjas.map((f, i) => `<div class="col-12 col-xl-6">
+    <label class="form-label small mb-1" for="h-hasta-${i}">${t('heiz.franja_hasta')}</label>
+    <input type="number" class="form-control form-control-sm mb-2" style="max-width:140px" id="h-hasta-${i}" data-hasta="${i}" min="0" step="any" value="${f.hasta ?? ''}" placeholder="${esc(t('heiz.sin_limite'))}">
+    <div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>${t('heiz.energia')}</th><th colspan="3" class="text-center">kWh A · B · C</th><th colspan="3" class="text-center">€ A · B · C</th></tr></thead><tbody>` +
+    FUENTES_HEIZ.map(fuente => `<tr><th scope="row" class="fw-normal small text-nowrap">${t('heiz.fuente.' + fuente)}</th>${entrada(i, fuente, 'kwh', f.filas[fuente]?.kwh)}${entrada(i, fuente, 'costo', f.filas[fuente]?.costo)}</tr>`).join('') +
+    '</tbody></table></div></div>').join('');
+}
+async function guardarHeiz(body) {
+  try {
+    usarHeiz((await api('/api/config', { method: 'PUT', body })).heizspiegels);
+    aviso(t('aj.guardados'), 'success');
+  } catch (err) { aviso(err.message); }
+}
+$('#h-anio').addEventListener('change', e => {
+  leerFormHeiz();
+  anioHeiz = e.target.value;
+  renderHeizAjustes();
+});
+$('#h-agregar').addEventListener('click', () => {
+  const anio = $('#h-nuevo').value.trim();
+  if (!/^\d{4}$/.test(anio) || anio < 2000 || anio > 2100) return aviso(t('err.espejo_anio'));
+  leerFormHeiz();
+  if (!heizEdit[anio]) heizEdit[anio] = { ...JSON.parse(JSON.stringify(heizEdit[anioHeiz])), edicion: Number(anio) + 1 };
+  anioHeiz = anio;
+  $('#h-nuevo').value = '';
+  renderHeizAjustes();
+});
+$('#h-guardar').addEventListener('click', async () => {
+  leerFormHeiz();
+  if (await confirmar(t('conf.ajustes'))) await guardarHeiz({ heizspiegels: heizEdit });
+});
+$('#h-restaurar').addEventListener('click', async () => {
+  if (await confirmar(t('heiz.conf_restaurar'), { detalle: anioHeiz })) await guardarHeiz({ restaurar_heizspiegel: anioHeiz });
+});
+$('#h-borrar').addEventListener('click', async () => {
+  if (!await confirmar(t('espejo.conf_borrar'), { detalle: anioHeiz, peligro: true })) return;
+  leerFormHeiz();
+  const restantes = { ...heizEdit };
+  delete restantes[anioHeiz];
+  await guardarHeiz({ heizspiegels: restantes });
 });
 
 function renderSensoresAjustes() {
@@ -3779,6 +4196,8 @@ function renderSensoresAjustes() {
 function renderAjustes() {
   renderSensoresAjustes();
   cargarVivienda().catch(err => aviso(err.message));
+  cargarEspejoAjustes().catch(err => aviso(err.message));
+  cargarHeizAjustes().catch(err => aviso(err.message));
   $('#a-habitaciones').innerHTML = estado.sensores.length ? estado.sensores.map(s => `<div class="mb-3">
       <div class="input-group">
         <span class="input-group-text">${punto(s.id)}</span>
