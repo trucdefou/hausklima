@@ -24,7 +24,7 @@ services:
       - ./zigbee2mqtt/data:/app/data
       - /run/udev:/run/udev:ro
     devices:
-      - ${ZIGBEE_DONGLE:?Falta ZIGBEE_DONGLE en .env}:/dev/ttyACM0
+      - ${ZIGBEE_DONGLE:?Missing ZIGBEE_DONGLE in .env}:/dev/ttyACM0
     environment:
       - TZ=Europe/Berlin
 
@@ -38,8 +38,8 @@ services:
     ports:
       - "8082:8000"
     volumes:
-      - ./datos:/datos
+      - ./data:/data
       - ./panel:/app:ro
     environment:
       - TZ=Europe/Berlin
-      - PANEL_PASSWORD=${PANEL_PASSWORD:?Falta PANEL_PASSWORD en .env}
+      - PANEL_PASSWORD=${PANEL_PASSWORD:?Missing PANEL_PASSWORD in .env}

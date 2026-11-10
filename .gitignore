@@ -1,9 +1,9 @@
-# Secretos
+# Secrets
 .env
-datos/.clave_sesion
+data/.session_key
 
-# Datos y estado en tiempo de ejecución
-datos/
+# Runtime data and state
+data/
 mosquitto/data/
 mosquitto/log/
 zigbee2mqtt/data/

@@ -22,7 +22,7 @@ The sensors publish their readings to Zigbee2MQTT. The dashboard receives them o
 - Warns in the top bar when a sensor stops reporting, with signal status and an outage log in Settings.
 - Shows house metrics: humidity loss and recovery, cooling, and energy per m² from the annual heating bill, for a house or an apartment.
 - Supports manual sensors for rooms without a Zigbee sensor.
-- Tracks heating and hot water meter readings, with billing periods and consumption calculation.
+- Tracks heating, hot water and cold water meter readings, with billing periods and consumption calculation. Hot water is rated against the Warmwasserspiegel; cold water is only counted.
 - Exports temperatures, windows, thermostats and consumption to CSV.
 - Available in Spanish, English and German; the language is picked from the browser.
 - Password-protected.
@@ -47,7 +47,7 @@ The sensors publish their readings to Zigbee2MQTT. The dashboard receives them o
 Zigbee sensors ──► USB dongle ──► zigbee2mqtt ──► mosquitto ──► panel ──► browser
                                      :8081          :1883        :8082
                                                                    │
-                                                          datos/clima.db (SQLite)
+                                                          data/climate.db (SQLite)
 ```
 
 | Service       | Image                        | Host port | Role                                      |
@@ -115,7 +115,7 @@ The frontend is plain static files (CoreUI, Chart.js, chartjs-plugin-zoom, flatp
 4. Create the data folder before the first start. If Docker creates it, it ends up owned by root and the dashboard (which runs as user 1000) can't write to it:
 
    ```bash
-   mkdir -p datos
+   mkdir -p data
    ```
 
 5. Start the services:
@@ -130,15 +130,15 @@ The frontend is plain static files (CoreUI, Chart.js, chartjs-plugin-zoom, flatp
 
 ## Data
 
-Everything the dashboard generates lives in `datos/`:
+Everything the dashboard generates lives in `data/`:
 
 | File             | Contents                                                     |
 |------------------|--------------------------------------------------------------|
-| `clima.db`       | SQLite database with readings, windows, thermostats and meters |
+| `climate.db`     | SQLite database with readings, windows, thermostats and meters |
 | `config.json`    | Location, room names, interval and ranges                    |
-| `.clave_sesion`  | Key used to sign session cookies (created automatically)     |
+| `.session_key`   | Key used to sign session cookies (created automatically)     |
 
-To back up, copy `datos/` and `zigbee2mqtt/data/`. Without the latter you'd have to pair all the sensors again.
+To back up, copy `data/` and `zigbee2mqtt/data/`. Without the latter you'd have to pair all the sensors again.
 
 ## Security
 
