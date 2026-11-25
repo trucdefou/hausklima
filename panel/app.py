@@ -1,6 +1,7 @@
 """Temperature dashboard.
 
 - Listens to Zigbee2MQTT sensors over MQTT.
+- Listens to Mi Flora plant sensors (Bluetooth LE) decoded by Theengs Gateway over MQTT.
 - Stores readings (and the outdoor temperature) in SQLite (data/climate.db) every N minutes (configurable).
 - Logs window openings in the same database.
 - CSV files are generated when downloaded.
@@ -34,6 +35,8 @@ from werkzeug.exceptions import HTTPException
 MQTT_HOST = os.environ.get("MQTT_HOST", "mosquitto")
 MQTT_PORT = int(os.environ.get("MQTT_PORT", "1883"))
 BASE_TOPIC = os.environ.get("BASE_TOPIC", "zigbee2mqtt")
+# Theengs Gateway publishes every decoded BLE device under <PLANT_TOPIC>/<MAC without colons>
+PLANT_TOPIC = os.environ.get("PLANT_TOPIC", "home/TheengsGateway/BTtoMQTT")
 WEATHER_INTERVAL = int(os.environ.get("WEATHER_INTERVAL_SECONDS", "600"))
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 PORT = int(os.environ.get("PORT", "8000"))
@@ -43,6 +46,14 @@ LEGACY_WINDOWS_CSV_PATH = os.path.join(DATA_DIR, "ventanas.csv")  # old format, 
 DB_PATH = os.path.join(DATA_DIR, "climate.db")
 TEMP_COLS = ["timestamp", "sensor", "temperature", "humidity", "battery", "linkquality", "last_reading"]
 WINDOW_COLS = ["id", "sensor", "start_at", "end_at", "note"]
+PLANT_COLS = ["timestamp", "sensor", "moisture", "light", "conductivity", "temperature", "battery", "rssi", "last_reading"]
+# Theengs Decoder key mapped to our column. Each BLE advertisement carries only some of them.
+PLANT_KEYS = {"moi": "moisture", "lux": "light", "fer": "conductivity", "tempc": "temperature", "batt": "battery", "rssi": "rssi"}
+PLANT_MODELS = ("HHCCJCY01",)   # Xiaomi Flower Care / Mi Flora ("HHCCJCY01HHCC" in Theengs)
+# Ideal ranges per plant (editable in Settings); generic values for common houseplants
+PLANT_REF_DEFAULT = {"moisture": {"min": 15, "max": 60}, "light": {"min": 500, "max": 30000},
+                     "conductivity": {"min": 350, "max": 2000}, "temperature": {"min": 10, "max": 32}}
+PLANT_REF_LIMITS = {"moisture": (0, 100), "light": (0, 200000), "conductivity": (0, 10000), "temperature": (-20, 60)}
 OUTDOOR = "outdoor"
 # An older reading is not stored: the sensor is not transmitting. Same as availability.passive.timeout in Zigbee2MQTT.
 VALID_READING_MINUTES = 120
@@ -53,6 +64,7 @@ DEFAULT_CONFIG = {
     "rooms": {},
     "interval_minutes": 5,
     "live_seconds": 10,    # how often the browser checks for new data (does not affect what is stored)
+    "plants": {},   # per Mi Flora id (MAC without colons): {"name": ..., plus the ranges of PLANT_REF_DEFAULT}
     "manual_sensors": [],   # ids of sensors whose records are entered by hand (e.g. "manual_1a2b3c4d")
     # recommended ranges, drawn as a reference on the chart of each metric
     "humidity_ref": {"min": 40, "max": 60},
@@ -131,6 +143,7 @@ REF_LIMITS = {"humidity_ref": (0, 100, "err.humidity_ref"), "temp_ref": (-10, 40
 
 lock = threading.RLock()
 latest = {}           # friendly_name -> latest reading
+plants_latest = {}    # Mi Flora id: latest merged values (Theengs publishes partial advertisements)
 ieee_by_name = {}   # friendly_name -> ieee_address
 sensor_connection = {}   # ieee_address -> "online" / "offline" (Zigbee2MQTT availability)
 pending_connection = {}  # friendly_name -> state received before its IEEE address is known
@@ -248,6 +261,7 @@ def on_connect(client, userdata, flags, reason_code, properties):
     client.subscribe(f"{BASE_TOPIC}/+")
     client.subscribe(f"{BASE_TOPIC}/+/availability")
     client.subscribe(f"{BASE_TOPIC}/bridge/devices")
+    client.subscribe(f"{PLANT_TOPIC}/+")
 
 
 def reading_time(data):
@@ -265,10 +279,26 @@ def mark_changed():
         live_version += 1
 
 
+def on_plant_message(msg, data):
+    """Merges a Theengs Gateway advertisement into the latest values of that Mi Flora."""
+    if not isinstance(data, dict) or not str(data.get("model_id", "")).startswith(PLANT_MODELS):
+        return
+    plant = msg.topic.rsplit("/", 1)[-1].upper()
+    values = {col: data[key] for key, col in PLANT_KEYS.items() if isinstance(data.get(key), (int, float))}
+    if not values.keys() - {"rssi"}:
+        return
+    with lock:
+        plants_latest.setdefault(plant, {}).update(values, last_reading=now())
+    mark_changed()
+
+
 def on_message(client, userdata, msg):
     try:
         data = json.loads(msg.payload)
     except ValueError:
+        return
+    if msg.topic.startswith(PLANT_TOPIC + "/"):
+        on_plant_message(msg, data)
         return
     if msg.topic.endswith("/availability"):
         name = msg.topic[len(BASE_TOPIC) + 1:-len("/availability")]
@@ -450,6 +480,21 @@ CREATE TABLE IF NOT EXISTS sensor_outages (
     linkquality    INTEGER
 );
 CREATE INDEX IF NOT EXISTS outages_by_since ON sensor_outages (since);
+
+-- Plant sensors (Mi Flora over Bluetooth): soil moisture (%), light (lux), conductivity (uS/cm), soil temperature
+CREATE TABLE IF NOT EXISTS plant_readings (
+    timestamp     TEXT NOT NULL,
+    sensor        TEXT NOT NULL,
+    moisture      REAL,
+    light         INTEGER,
+    conductivity  INTEGER,
+    temperature   REAL,
+    battery       INTEGER,
+    rssi          INTEGER,
+    last_reading  TEXT,
+    PRIMARY KEY (timestamp, sensor)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS plant_readings_by_sensor ON plant_readings (sensor, timestamp);
 
 -- Daily mean outdoor temperature (Open-Meteo): splits consumption between readings according to the cold.
 -- Can be downloaded again; depends on the configured place and is deleted if it changes.
@@ -650,14 +695,20 @@ def save_readings(date=None):
         rows.append({"timestamp": date.isoformat(timespec="seconds"), "sensor": OUTDOOR,
                       "temperature": a["temperature"], "humidity": a["humidity"], "battery": None,
                       "linkquality": None, "last_reading": a["time"]})
-    if not rows:
+    with lock:
+        plants = {p: dict(v) for p, v in plants_latest.items()}
+    plant_rows = [{**dict.fromkeys(PLANT_COLS), **v, "timestamp": date.isoformat(timespec="seconds"), "sensor": p}
+                  for p, v in sorted(plants.items()) if v["last_reading"] >= limit]
+    if not rows and not plant_rows:
         print("No readings yet, nothing to store", flush=True)
         return 0
     with connection() as conn:
         conn.executemany(f"INSERT OR REPLACE INTO readings ({', '.join(TEMP_COLS)}) "
                         f"VALUES ({', '.join(':' + c for c in TEMP_COLS)})", rows)
-    print(f"{len(rows)} readings stored", flush=True)
-    return len(rows)
+        conn.executemany(f"INSERT OR REPLACE INTO plant_readings ({', '.join(PLANT_COLS)}) "
+                        f"VALUES ({', '.join(':' + c for c in PLANT_COLS)})", plant_rows)
+    print(f"{len(rows)} readings and {len(plant_rows)} plant readings stored", flush=True)
+    return len(rows) + len(plant_rows)
 
 
 def read_instantly(iso_date):
@@ -879,6 +930,70 @@ def latest_manual(ids):
                 for r in conn.execute(sql, list(ids))}
 
 
+def plant_name(plant, cfg):
+    return (cfg["plants"].get(plant) or {}).get("name") or f"Mi Flora {plant[-4:]}"
+
+
+def current_plants(cfg):
+    """Live values of every known plant; after a restart, the last stored row until a new advertisement arrives."""
+    with lock:
+        live = {p: dict(v) for p, v in plants_latest.items()}
+    missing = set(cfg["plants"]) - set(live)
+    if missing:
+        marks = ", ".join("?" * len(missing))
+        sql = f"""SELECT l.* FROM plant_readings l JOIN (SELECT sensor, MAX(timestamp) AS m FROM plant_readings
+                  WHERE sensor IN ({marks}) GROUP BY sensor) u ON l.sensor = u.sensor AND l.timestamp = u.m"""
+        with connection() as conn:
+            for r in conn.execute(sql, sorted(missing)):
+                live[r["sensor"]] = {c: r[c] for c in PLANT_COLS[2:]}
+    plants = []
+    for p in set(live) | set(cfg["plants"]):
+        conf = cfg["plants"].get(p) or {}
+        plants.append({"id": p, "name": plant_name(p, cfg), "configured_name": conf.get("name", ""),
+                       "configured": p in cfg["plants"],
+                       "ref": {k: conf.get(k) or v for k, v in PLANT_REF_DEFAULT.items()}, **live.get(p, {})})
+    plants.sort(key=lambda x: x["name"].lower())
+    return plants
+
+
+def read_plants(since, until, sensors):
+    cond, params = [], []
+    if since:
+        cond.append("timestamp >= ?")
+        params.append(since)
+    if until:
+        cond.append("timestamp <= ?")
+        params.append(until)
+    if sensors:
+        cond.append(f"sensor IN ({', '.join('?' * len(sensors))})")
+        params.extend(sorted(sensors))
+    sql = f"SELECT {', '.join(PLANT_COLS)} FROM plant_readings"
+    if cond:
+        sql += " WHERE " + " AND ".join(cond)
+    with connection() as conn:
+        return [dict(r) for r in conn.execute(sql + " ORDER BY timestamp, sensor", params)]
+
+
+def validate_plants(data):
+    if not isinstance(data, dict):
+        abort(400, "err.invalid_data")
+    plants = {}
+    for plant, conf in data.items():
+        if not isinstance(conf, dict):
+            abort(400, "err.invalid_data")
+        entry = {"name": str(conf.get("name") or "").strip()[:40]}
+        for key, (low, high) in PLANT_REF_LIMITS.items():
+            ref = conf.get(key) or PLANT_REF_DEFAULT[key]
+            if not isinstance(ref, dict):
+                abort(400, "err.plant_ref")
+            mn, mx = to_number(ref.get("min")), to_number(ref.get("max"))
+            if mn is None or mx is None or not low <= mn < mx <= high:
+                abort(400, "err.plant_ref")
+            entry[key] = {"min": mn, "max": mx}
+        plants[str(plant).upper()[:32]] = entry
+    return plants
+
+
 def current_thermostats():
     sql = """SELECT t.* FROM thermostats t
              JOIN (SELECT sensor, MAX(timestamp) AS m FROM thermostats GROUP BY sensor) u
@@ -1014,6 +1129,7 @@ CSV_FILES = {
     "period_closings": {"es": "cierres_periodo", "en": "period_closings", "de": "periodenabschluesse"},
     "sensor_outages": {"es": "cortes_sensor", "en": "sensor_outages", "de": "sensorausfaelle"},
     "period_bills": {"es": "facturas_periodo", "en": "period_bills", "de": "abrechnungen"},
+    "plants": {"es": "plantas", "en": "plants", "de": "pflanzen"},
     "all": {"es": "hausklima_todos_los_datos", "en": "hausklima_all_data", "de": "hausklima_alle_daten"},
 }
 CSV_COLUMNS = {
@@ -1050,6 +1166,11 @@ CSV_COLUMNS = {
     "units_building": {"es": "Unidades edificio", "en": "Units building", "de": "Einheiten Gebäude"},
     "price_kwh": {"es": "Precio (€/kWh)", "en": "Price (€/kWh)", "de": "Preis (€/kWh)"},
     "paid": {"es": "Pagado (€)", "en": "Paid (€)", "de": "Bezahlt (€)"},
+    "plant": {"es": "Planta", "en": "Plant", "de": "Pflanze"},
+    "moisture": {"es": "Humedad del suelo (%)", "en": "Soil moisture (%)", "de": "Bodenfeuchtigkeit (%)"},
+    "light": {"es": "Luz (lux)", "en": "Light (lux)", "de": "Licht (Lux)"},
+    "conductivity": {"es": "Fertilidad (µS/cm)", "en": "Fertility (µS/cm)", "de": "Düngung (µS/cm)"},
+    "rssi": {"es": "Señal Bluetooth (dBm)", "en": "Bluetooth signal (dBm)", "de": "Bluetooth-Signal (dBm)"},
 }
 CSV_VALUES = {
     "reading": {"es": "Lectura", "en": "Reading", "de": "Ablesung"},
@@ -1211,7 +1332,7 @@ def api_status():
     return jsonify(sensors=sensors, outdoor=a, place=cfg["place"],
                    interval_minutes=cfg["interval_minutes"], live_seconds=cfg["live_seconds"],
                    humidity_ref=cfg["humidity_ref"], temp_ref=cfg["temp_ref"],
-                   move_in_date=cfg["move_in_date"], now=now())
+                   move_in_date=cfg["move_in_date"], plants=current_plants(cfg), now=now())
 
 
 @app.post("/api/save_now")
@@ -1515,6 +1636,19 @@ def api_temperatures_csv():
     lang = requested_lang()
     rows = [{**f, "room": name_of(f["sensor"], cfg, lang)} for f in read_temperatures(*temperature_filters())]
     return csv_response("temperatures", ["timestamp", "room"] + TEMP_COLS[1:], rows, lang)
+
+
+@app.get("/api/plants")
+def api_plants():
+    rows = [[f[c] for c in PLANT_COLS] for f in read_plants(*temperature_filters())]
+    return jsonify(columns=PLANT_COLS, rows=rows)
+
+
+@app.get("/api/plants.csv")
+def api_plants_csv():
+    cfg = read_config()
+    rows = [{**f, "plant": plant_name(f["sensor"], cfg)} for f in read_plants(*temperature_filters())]
+    return csv_response("plants", ["timestamp", "plant"] + PLANT_COLS[1:], rows, requested_lang())
 
 
 @app.get("/api/windows")
@@ -2032,16 +2166,21 @@ def api_export_zip():
     tables = [("temperatures", "readings"), ("windows", "windows"), ("thermostats", "thermostats"),
               ("meters", "meters"), ("meter_readings", "meter_readings"),
               ("periods", "periods"), ("period_closings", "period_closings"), ("sensor_outages", "sensor_outages"),
-              ("period_bills", "period_bills")]
+              ("period_bills", "period_bills"), ("plants", "plant_readings")]
     order = {"readings": "timestamp, sensor", "windows": "start_at", "thermostats": "sensor, timestamp",
-             "meter_readings": "meter, timestamp", "periods": "start_at", "sensor_outages": "since"}
+             "meter_readings": "meter, timestamp", "periods": "start_at", "sensor_outages": "since",
+             "plant_readings": "timestamp, sensor"}
     output = io.BytesIO()
     with connection() as conn, zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as z:
         for file, table in tables:
             cur = conn.execute(f"SELECT * FROM {table}" + (f" ORDER BY {order[table]}" if table in order else ""))
             columns = [c[0] for c in cur.description]
             rows = [dict(zip(columns, r)) for r in cur]
-            if "sensor" in columns:
+            if table == "plant_readings":
+                for f in rows:
+                    f["plant"] = plant_name(f["sensor"], cfg)
+                columns.insert(columns.index("sensor"), "plant")
+            elif "sensor" in columns:
                 for f in rows:
                     f["room"] = name_of(f["sensor"], cfg, lang) if f["sensor"] else ""
                 columns.insert(columns.index("sensor"), "room")
@@ -2284,6 +2423,8 @@ def api_save_config():
                 if mn is None or mx is None or not low <= mn < mx <= high:
                     abort(400, error)
                 cfg[key] = {"min": mn, "max": mx}
+        if "plants" in data:
+            cfg["plants"] = validate_plants(data["plants"])
         if "water_benchmarks" in data:
             cfg["water_benchmarks"] = validate_benchmarks(data["water_benchmarks"])
         if data.get("restore_benchmark_2024"):

@@ -112,6 +112,7 @@
     <li class="nav-item"><a class="nav-link" href="#temperatures" data-tab="temperatures"><i class="nav-icon cil-chart-line"></i> <span data-i18n="nav.temperatures"></span></a></li>
     <li class="nav-item"><a class="nav-link" href="#windows" data-tab="windows"><i class="nav-icon cil-window"></i> <span data-i18n="nav.windows"></span></a></li>
     <li class="nav-item"><a class="nav-link" href="#thermostats" data-tab="thermostats"><i class="nav-icon cil-fire"></i> <span data-i18n="nav.thermostats"></span></a></li>
+    <li class="nav-item"><a class="nav-link" href="#plants" data-tab="plants"><i class="nav-icon cil-leaf"></i> <span data-i18n="nav.plants"></span></a></li>
     <li class="nav-item"><a class="nav-link" href="#climate" data-tab="climate"><i class="nav-icon cil-graph"></i> <span data-i18n="nav.climate"></span></a></li>
     <li class="nav-item"><a class="nav-link" href="#energy" data-tab="energy"><i class="nav-icon cil-bolt"></i> <span data-i18n="nav.energy"></span></a></li>
     <li class="nav-title" data-i18n="nav.data"></li>
@@ -309,6 +310,51 @@
             <table class="table table-hover align-middle mb-0 tabular" id="tm-table"></table>
           </div>
           <div class="card-footer small text-body-secondary" data-i18n="thermo.help"></div>
+        </div>
+      </section>
+
+      <!-- PLANTS -->
+      <section id="tab-plants" hidden>
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xxl-5 g-3 mb-4" id="pl-cards"></div>
+        <div class="small text-body-secondary mb-4" data-i18n="plant.empty_help" id="pl-empty" hidden></div>
+        <div class="card mb-4">
+          <div class="card-header"><i class="cil-filter me-2"></i><strong data-i18n="filters"></strong></div>
+          <div class="card-body">
+            <div class="row g-3 align-items-end">
+              <div class="col-6 col-md-3"><label class="form-label" for="pl-since" data-i18n="since"></label><input type="date" class="form-control" id="pl-since"></div>
+              <div class="col-6 col-md-3"><label class="form-label" for="pl-until" data-i18n="until"></label><input type="date" class="form-control" id="pl-until"></div>
+              <div class="col-12 col-md-3"><label class="form-label" for="pl-sensor" data-i18n="plant.plant"></label><select class="form-select" id="pl-sensor"></select></div>
+              <div class="col-12 col-md-3 d-flex gap-2">
+                <button class="btn btn-primary" id="pl-apply" data-i18n="filter"></button>
+                <a class="btn btn-outline-secondary" id="pl-download"><i class="cil-cloud-download me-1"></i>CSV</a>
+              </div>
+            </div>
+            <div class="small text-body-secondary mt-3" data-i18n="plant.ref_help"></div>
+          </div>
+        </div>
+        <div class="card mb-4">
+          <div class="card-header"><i class="cil-drop me-2"></i><strong data-i18n="plant.moisture"></strong></div>
+          <div class="card-body">
+            <div class="chart"><canvas id="chart-plant-moisture"></canvas></div>
+          </div>
+        </div>
+        <div class="card mb-4">
+          <div class="card-header"><i class="cil-sun me-2"></i><strong data-i18n="plant.light"></strong></div>
+          <div class="card-body">
+            <div class="chart"><canvas id="chart-plant-light"></canvas></div>
+          </div>
+        </div>
+        <div class="card mb-4">
+          <div class="card-header"><i class="cil-leaf me-2"></i><strong data-i18n="plant.conductivity"></strong></div>
+          <div class="card-body">
+            <div class="chart"><canvas id="chart-plant-conductivity"></canvas></div>
+          </div>
+        </div>
+        <div class="card mb-4">
+          <div class="card-header"><i class="cil-plant me-2"></i><strong data-i18n="plant.temperature"></strong></div>
+          <div class="card-body">
+            <div class="chart"><canvas id="chart-plant-temperature"></canvas></div>
+          </div>
         </div>
       </section>
 
@@ -654,6 +700,14 @@
             </div>
           </div>
           <div class="card">
+            <div class="card-header"><i class="cil-leaf me-2"></i><strong data-i18n="plant.settings_title"></strong></div>
+            <div class="card-body">
+              <p class="small text-body-secondary" data-i18n="plant.settings_help"></p>
+              <div id="a-plants"></div>
+              <button class="btn btn-primary" id="a-plants-save" hidden><i class="cil-save me-1"></i><span data-i18n="plant.save"></span></button>
+            </div>
+          </div>
+          <div class="card">
             <div class="card-header"><i class="cil-pencil me-2"></i><strong data-i18n="manual.card_title"></strong></div>
             <div class="card-body">
               <p class="small text-body-secondary" data-i18n="manual.help"></p>
@@ -873,6 +927,36 @@
 // ======================================================================
 const I18N = {
   es: {
+    'nav.plants': 'Plantas',
+    'plant.plant': 'Planta',
+    'plant.moisture': 'Humedad del suelo',
+    'plant.light': 'Luz',
+    'plant.conductivity': 'Fertilidad',
+    'plant.temperature': 'Temperatura del suelo',
+    'plant.water': 'Regar',
+    'plant.too_wet': 'Demasiada agua',
+    'plant.fertilize': 'Abonar',
+    'plant.too_fertile': 'Demasiado abono',
+    'plant.too_cold': 'Hace frío',
+    'plant.too_hot': 'Hace calor',
+    'plant.ok': 'Todo bien',
+    'plant.no_signal': 'Sin datos hace más de 2 h',
+    'plant.ref_help': 'La franja verde es el rango ideal de la planta (se edita en Ajustes > Sensores). Se muestra cuando hay una sola planta en el gráfico.',
+    'plant.empty_help': 'Todavía no llegó ningún dato de plantas. Comprueba que el servicio theengs esté en marcha y que el sensor esté a menos de 10 m de la Raspberry Pi.',
+    'plant.settings_title': 'Plantas (Bluetooth)',
+    'plant.settings_help': 'Sensores Mi Flora detectados por Bluetooth. Ponles nombre y ajusta el rango ideal de cada medida: fuera de él la tarjeta avisa (regar, abonar...). Los valores dependen de la especie de la planta.',
+    'plant.none': 'No se detectó ningún sensor de plantas.',
+    'plant.save': 'Guardar plantas',
+    'plant.saved': 'Plantas guardadas',
+    'plant.forget': 'Olvidar',
+    'plant.min': 'mín.',
+    'plant.max': 'máx.',
+    'plant.rssi': 'Señal',
+    'plant.ideal_min': 'mín. ideal {v}',
+    'plant.ideal_max': 'máx. ideal {v}',
+    'conf.plants': '¿Guardar la configuración de las plantas?',
+    'conf.plant_forget': '¿Olvidar la planta {h}? Se borran su nombre y sus rangos; el histórico se conserva.',
+    'err.plant_ref': 'En cada rango de la planta, el mínimo tiene que ser menor que el máximo',
     'home.title': 'Vivienda y facturas', 'home.help': 'Las unidades del medidor no son kWh. Con los kWh de la factura anual, el panel calcula cuánto vale cada unidad y el consumo por m². Dejá vacío lo que no tengas.', 'home.is_apt': 'Es un departamento (parte de un edificio)', 'home.m2_house': 'Superficie de la casa (m²)', 'home.m2_apt': 'Superficie del departamento (m²)', 'home.m2_building': 'Superficie del edificio (m²)', 'home.rooms': 'Superficie por medidor', 'home.bills': 'Facturas anuales', 'home.kwh_home': 'kWh vivienda', 'home.units_home': 'Unidades en la factura', 'home.kwh_building': 'kWh edificio', 'home.units_building': 'Unidades del edificio', 'home.save': 'Guardar vivienda', 'home.price_kwh': 'Precio (€/kWh)', 'energy.price': '€/kWh', 'home.paid': 'Pagado (€)', 'energy.paid': 'Pagado (€)', 'energy.paid_help': 'Monto real pagado por ese período, según la factura. Incluye lo que no entra en el costo calculado, como costos fijos, medición o servicios.', 'energy.cost': 'Costo (€)', 'energy.projection': 'Estimación a fin de año', 'energy.proj_kwh': 'Cierre est. (kWh)', 'energy.proj_cost': 'Cierre est. (€)', 'energy.projection_help': 'Lo esperado al cierre del período en curso: unidades proyectadas según el frío × kWh/unidad medio de las facturas anteriores × €/kWh. Es una estimación: asume un invierno igual al anterior y seguir calefaccionando igual. El valor por unidad varió mucho entre años, así que el margen es amplio.', 'energy.price_help': 'Precio de la energía por kWh cargado para ese año. Si un período no lo tiene, se usa el último conocido, con ≈.', 'energy.cost_help': 'kWh × precio por kWh. Es el costo de la energía consumida: la factura real puede sumar costos fijos, base o de servicio, así que no tiene por qué coincidir con el total facturado.', 'err.home': 'Los valores deben ser mayores que 0', 'energy.title': 'Energía y costos', 'energy.annual': 'Comparación anual', 'energy.per_room': 'Por habitación', 'energy.consumption_group': 'Consumo', 'energy.cost_group': 'Costos', 'energy.share': 'Participación', 'energy.kpi_intensity': 'Intensidad {p}', 'energy.kpi_cost': 'Costo de energía {p}', 'energy.kpi_current': '{p} a la fecha', 'energy.kpi_end': 'Estimación de cierre {p}', 'energy.paid_val': 'Pagado: {v} €', 'energy.empty': 'Falta cargar los kWh de la factura.', 'energy.go_settings': 'Ir a Ajustes', 'energy.units': 'Unidades', 'energy.factor': 'kWh/unidad', 'energy.factor_help': 'kWh de la factura ÷ unidades del período. Dice cuánta energía vale cada unidad del medidor.', 'energy.avg_factor_help': 'kWh de la factura ÷ unidades del período. El período sin factura usa la media de los anteriores: todos los kWh ÷ todas las unidades, y en un departamento con los totales del edificio.', 'energy.kwh': 'kWh', 'energy.kwh_m2': 'kWh/m²', 'energy.w_m2': 'W/m²', 'energy.w_m2_help': 'Potencia media: kWh ÷ m² ÷ horas del período. Es un promedio de todo el período, no el consumo de una hora concreta. Si el período empezó con la mudanza, cuenta desde ese día.', 'energy.costs_title': 'Costos', 'energy.building_title': 'Edificio', 'energy.kwh_building': 'kWh edificio', 'energy.kwh_m2_building': 'kWh/m² edificio', 'energy.kwh_m2_home': 'kWh/m² vivienda', 'energy.vs_building': 'vs. edificio', 'energy.vs_building_help': 'Diferencia de kWh/m² de tu vivienda frente al promedio del edificio. Negativo significa que consumís menos por m². No se calcula si el período incluye la mudanza, porque no serían los mismos meses.', 'energy.estimated_help': 'Este período todavía no tiene factura: se usa el kWh/unidad medio de las anteriores (todos los kWh ÷ todas las unidades).', 'energy.building_source': 'Calculado con los kWh y unidades del edificio, porque falta el dato propio de la vivienda.', 'energy.building': 'según edificio',
     'met.humidity': 'Humedad relativa (HR)', 'met.temperature': 'Temperatura', 'met.note': 'Son medianas calculadas solo con lecturas realmente medidas. Las horas con el sensor caído no cuentan. Con más días de datos, estos valores serán más firmes.', 'met.loses': 'ΔHR por ventilación', 'met.recovers': 'Recuperación de HR', 'met.cools': 'ΔT por ventilación', 'met.night': 'Caída térmica nocturna', 'met.points': '%HR', 'met.points_h': '%HR/h', 'met.n_openings': 'mediana · {n} aperturas', 'met.n_nights': 'mediana · {n} noches', 'met.col_openings': 'Aperturas', 'met.col_loses': 'ΔHR (%HR)', 'met.col_speed': 'Tasa de caída (%HR/min)', 'met.col_recovers': 'Recuperación 1 h (%HR)', 'met.col_cools': 'ΔT (°C)', 'met.col_temp_recovers': 'Recuperación 1 h (°C)', 'met.col_nights': 'Noches', 'met.col_night': 'Caída 23–06 h (°C)', 'met.col_outdoor': 'T exterior', 'met.loses_help': 'ΔHR: variación de humedad relativa, en puntos porcentuales (%HR), desde la lectura previa a abrir hasta el mínimo de la apertura. Es la mediana de las aperturas medidas.', 'met.speed_help': 'Tasa de caída: %HR que baja por minuto, desde que se abre hasta el mínimo.', 'met.recovers_help': 'Recuperación: %HR que vuelve a subir en la hora siguiente al mínimo. Viene de la humedad que liberan paredes y muebles, y de la actividad en la casa. Entre paréntesis, cuántas aperturas lo permiten medir: se excluyen las interrumpidas por otra apertura.', 'met.cools_help': 'ΔT: variación de temperatura interior, desde la lectura previa a abrir hasta el mínimo de la apertura. Es la mediana de las aperturas medidas.', 'met.temp_recovers_help': 'Recuperación: grados que sube la temperatura en la hora siguiente al mínimo. Si es negativa, la habitación siguió enfriándose.', 'met.night_help': 'Caída térmica nocturna: variación de temperatura entre las 23:00 y las 06:00, en noches sin ventanas abiertas. Incluye la calefacción que haya estado funcionando, así que no mide la aislación por sí sola.',
     'app.title': 'Clima de casa',
@@ -1003,6 +1087,36 @@ const I18N = {
     'err.invalid_humidity': 'Humedad inválida (0–100)',
   },
   en: {
+    'nav.plants': 'Plants',
+    'plant.plant': 'Plant',
+    'plant.moisture': 'Soil moisture',
+    'plant.light': 'Light',
+    'plant.conductivity': 'Fertility',
+    'plant.temperature': 'Soil temperature',
+    'plant.water': 'Water it',
+    'plant.too_wet': 'Too much water',
+    'plant.fertilize': 'Fertilise',
+    'plant.too_fertile': 'Too much fertiliser',
+    'plant.too_cold': 'Too cold',
+    'plant.too_hot': 'Too hot',
+    'plant.ok': 'All good',
+    'plant.no_signal': 'No data for over 2 h',
+    'plant.ref_help': 'The green band is the ideal range of the plant (edit it in Settings > Sensors). It is shown when the chart holds a single plant.',
+    'plant.empty_help': 'No plant data has arrived yet. Check that the theengs service is running and the sensor is within 10 m of the Raspberry Pi.',
+    'plant.settings_title': 'Plants (Bluetooth)',
+    'plant.settings_help': 'Mi Flora sensors found over Bluetooth. Name them and set the ideal range of each measurement: outside it the card warns you (water, fertilise...). The values depend on the plant species.',
+    'plant.none': 'No plant sensor found.',
+    'plant.save': 'Save plants',
+    'plant.saved': 'Plants saved',
+    'plant.forget': 'Forget',
+    'plant.min': 'min',
+    'plant.max': 'max',
+    'plant.rssi': 'Signal',
+    'plant.ideal_min': 'ideal min. {v}',
+    'plant.ideal_max': 'ideal max. {v}',
+    'conf.plants': 'Save the plant settings?',
+    'conf.plant_forget': 'Forget the plant {h}? Its name and ranges are removed; the history is kept.',
+    'err.plant_ref': 'In each plant range, the minimum must be lower than the maximum',
     'home.title': 'Home and bills', 'home.help': 'Meter units are not kWh. With the kWh from the annual bill, the dashboard works out what each unit is worth and the consumption per m². Leave blank whatever you do not have.', 'home.is_apt': 'It is an apartment (part of a building)', 'home.m2_house': 'House area (m²)', 'home.m2_apt': 'Apartment area (m²)', 'home.m2_building': 'Building area (m²)', 'home.rooms': 'Area per meter', 'home.bills': 'Annual bills', 'home.kwh_home': 'kWh home', 'home.units_home': 'Units on the bill', 'home.kwh_building': 'kWh building', 'home.units_building': 'Building units', 'home.save': 'Save home', 'home.price_kwh': 'Price (€/kWh)', 'energy.price': '€/kWh', 'home.paid': 'Paid (€)', 'energy.paid': 'Paid (€)', 'energy.paid_help': 'Actual amount paid for that period, according to the bill. It includes what the calculated cost leaves out, such as fixed, metering or service costs.', 'energy.cost': 'Cost (€)', 'energy.projection': 'Year-end estimate', 'energy.proj_kwh': 'Est. close (kWh)', 'energy.proj_cost': 'Est. close (€)', 'energy.projection_help': 'Expected at the close of the current period: units projected from the cold × average kWh/unit of previous bills × €/kWh. It is an estimate: it assumes a winter like the last one and heating the same way. The value per unit varied a lot between years, so the margin is wide.', 'energy.price_help': 'Energy price per kWh entered for that year. If a period has none, the latest known one is used, with ≈.', 'energy.cost_help': 'kWh × price per kWh. It is the cost of the energy used: the real bill may add fixed, base or service costs, so it need not match the billed total.', 'err.home': 'Values must be greater than 0', 'energy.title': 'Energy and costs', 'energy.annual': 'Annual comparison', 'energy.per_room': 'By room', 'energy.consumption_group': 'Consumption', 'energy.cost_group': 'Costs', 'energy.share': 'Share', 'energy.kpi_intensity': 'Intensity {p}', 'energy.kpi_cost': 'Energy cost {p}', 'energy.kpi_current': '{p} to date', 'energy.kpi_end': 'Closing estimate {p}', 'energy.paid_val': 'Paid: {v} €', 'energy.empty': 'The kWh from the bill are missing.', 'energy.go_settings': 'Go to Settings', 'energy.units': 'Units', 'energy.factor': 'kWh/unit', 'energy.factor_help': 'kWh on the bill ÷ units in the period. It tells how much energy each meter unit is worth.', 'energy.avg_factor_help': 'kWh on the bill ÷ units in the period. A period without a bill uses the average of previous ones: all kWh ÷ all units, using building totals for an apartment.', 'energy.kwh': 'kWh', 'energy.kwh_m2': 'kWh/m²', 'energy.w_m2': 'W/m²', 'energy.w_m2_help': 'Average power: kWh ÷ m² ÷ hours in the period. It is an average of the whole period, not the use of a specific hour. If the period began with the move-in, it counts from that day.', 'energy.costs_title': 'Costs', 'energy.building_title': 'Building', 'energy.kwh_building': 'kWh building', 'energy.kwh_m2_building': 'kWh/m² building', 'energy.kwh_m2_home': 'kWh/m² home', 'energy.vs_building': 'vs. building', 'energy.vs_building_help': 'Difference in kWh/m² between your home and the building average. Negative means you use less per m². It is not calculated if the period includes the move-in, since the months would differ.', 'energy.estimated_help': 'This period has no bill yet: the average kWh/unit of previous bills is used (all kWh ÷ all units).', 'energy.building_source': 'Calculated from the building kWh and units, because the home figure is missing.', 'energy.building': 'from building',
     'met.humidity': 'Relative humidity (RH)', 'met.temperature': 'Temperature', 'met.note': 'These are medians calculated only from readings that were actually measured. Hours with the sensor down do not count. With more days of data, these values will become firmer.', 'met.loses': 'RH change from ventilation', 'met.recovers': 'RH recovery', 'met.cools': 'ΔT from ventilation', 'met.night': 'Night-time temperature drop', 'met.points': '%RH', 'met.points_h': '%RH/h', 'met.n_openings': 'median · {n} openings', 'met.n_nights': 'median · {n} nights', 'met.col_openings': 'Openings', 'met.col_loses': 'ΔRH (%RH)', 'met.col_speed': 'Drop rate (%RH/min)', 'met.col_recovers': '1 h recovery (%RH)', 'met.col_cools': 'ΔT (°C)', 'met.col_temp_recovers': '1 h recovery (°C)', 'met.col_nights': 'Nights', 'met.col_night': 'Drop 23–06 h (°C)', 'met.col_outdoor': 'Outdoor T', 'met.loses_help': 'ΔRH: change in relative humidity, in percentage points (%RH), from the reading before opening to the lowest value of the opening. It is the median of the measured openings.', 'met.speed_help': 'Drop rate: %RH lost per minute, from opening to the lowest value.', 'met.recovers_help': 'Recovery: %RH regained in the hour after the lowest value. It comes from moisture released by walls and furniture, and from activity at home. In brackets, how many openings allow measuring it: those interrupted by another opening are excluded.', 'met.cools_help': 'ΔT: change in indoor temperature, from the reading before opening to the lowest value of the opening. It is the median of the measured openings.', 'met.temp_recovers_help': 'Recovery: degrees gained in the hour after the lowest value. If negative, the room kept cooling.', 'met.night_help': 'Night-time temperature drop: temperature change between 23:00 and 06:00, on nights without open windows. It includes whatever heating was running, so it does not measure insulation on its own.',
     'app.title': 'Home climate',
@@ -1133,6 +1247,36 @@ const I18N = {
     'err.invalid_humidity': 'Invalid humidity (0–100)',
   },
   de: {
+    'nav.plants': 'Pflanzen',
+    'plant.plant': 'Pflanze',
+    'plant.moisture': 'Bodenfeuchtigkeit',
+    'plant.light': 'Licht',
+    'plant.conductivity': 'Düngung',
+    'plant.temperature': 'Bodentemperatur',
+    'plant.water': 'Gießen',
+    'plant.too_wet': 'Zu nass',
+    'plant.fertilize': 'Düngen',
+    'plant.too_fertile': 'Zu viel Dünger',
+    'plant.too_cold': 'Zu kalt',
+    'plant.too_hot': 'Zu warm',
+    'plant.ok': 'Alles gut',
+    'plant.no_signal': 'Seit über 2 h keine Daten',
+    'plant.ref_help': 'Der grüne Bereich ist der Idealbereich der Pflanze (änderbar unter Einstellungen > Sensoren). Er wird gezeigt, wenn das Diagramm nur eine Pflanze enthält.',
+    'plant.empty_help': 'Es sind noch keine Pflanzendaten angekommen. Prüfe, ob der Dienst theengs läuft und der Sensor höchstens 10 m vom Raspberry Pi entfernt ist.',
+    'plant.settings_title': 'Pflanzen (Bluetooth)',
+    'plant.settings_help': 'Per Bluetooth gefundene Mi-Flora-Sensoren. Gib ihnen einen Namen und stelle den Idealbereich jedes Messwerts ein: außerhalb davon warnt die Karte (gießen, düngen...). Die Werte hängen von der Pflanzenart ab.',
+    'plant.none': 'Kein Pflanzensensor gefunden.',
+    'plant.save': 'Pflanzen speichern',
+    'plant.saved': 'Pflanzen gespeichert',
+    'plant.forget': 'Vergessen',
+    'plant.min': 'min.',
+    'plant.max': 'max.',
+    'plant.rssi': 'Signal',
+    'plant.ideal_min': 'ideal min. {v}',
+    'plant.ideal_max': 'ideal max. {v}',
+    'conf.plants': 'Pflanzeneinstellungen speichern?',
+    'conf.plant_forget': 'Pflanze {h} vergessen? Name und Bereiche werden gelöscht, der Verlauf bleibt erhalten.',
+    'err.plant_ref': 'In jedem Pflanzenbereich muss das Minimum kleiner als das Maximum sein',
     'home.title': 'Wohnung und Abrechnungen', 'home.help': 'Zählereinheiten sind keine kWh. Mit den kWh aus der Jahresabrechnung berechnet das Panel den Wert jeder Einheit und den Verbrauch pro m². Lass leer, was du nicht hast.', 'home.is_apt': 'Es ist eine Wohnung (Teil eines Gebäudes)', 'home.m2_house': 'Hausfläche (m²)', 'home.m2_apt': 'Wohnungsfläche (m²)', 'home.m2_building': 'Gebäudefläche (m²)', 'home.rooms': 'Fläche pro Zähler', 'home.bills': 'Jahresabrechnungen', 'home.kwh_home': 'kWh Wohnung', 'home.units_home': 'Einheiten laut Abrechnung', 'home.kwh_building': 'kWh Gebäude', 'home.units_building': 'Einheiten des Gebäudes', 'home.save': 'Wohnung speichern', 'home.price_kwh': 'Preis (€/kWh)', 'energy.price': '€/kWh', 'home.paid': 'Bezahlt (€)', 'energy.paid': 'Bezahlt (€)', 'energy.paid_help': 'Tatsächlich bezahlter Betrag für diesen Zeitraum laut Abrechnung. Enthält, was die berechneten Kosten nicht abdecken, etwa Grund-, Mess- oder Servicekosten.', 'energy.cost': 'Kosten (€)', 'energy.projection': 'Schätzung zum Jahresende', 'energy.proj_kwh': 'Prognose (kWh)', 'energy.proj_cost': 'Prognose (€)', 'energy.projection_help': 'Erwartet zum Ende des laufenden Zeitraums: nach Kälte prognostizierte Einheiten × mittlere kWh/Einheit der bisherigen Abrechnungen × €/kWh. Das ist eine Schätzung: Sie nimmt einen Winter wie den letzten und gleiches Heizen an. Der Wert pro Einheit schwankte zwischen den Jahren stark, die Spanne ist also groß.', 'energy.price_help': 'Für dieses Jahr eingetragener Energiepreis pro kWh. Fehlt er, wird der letzte bekannte verwendet, mit ≈.', 'energy.cost_help': 'kWh × Preis pro kWh. Das sind die Kosten der verbrauchten Energie: Die echte Abrechnung kann Grund- oder Nebenkosten enthalten und muss daher nicht mit dem Rechnungsbetrag übereinstimmen.', 'err.home': 'Die Werte müssen größer als 0 sein', 'energy.title': 'Energie und Kosten', 'energy.annual': 'Jahresvergleich', 'energy.per_room': 'Nach Raum', 'energy.consumption_group': 'Verbrauch', 'energy.cost_group': 'Kosten', 'energy.share': 'Anteil', 'energy.kpi_intensity': 'Intensität {p}', 'energy.kpi_cost': 'Energiekosten {p}', 'energy.kpi_current': '{p} bis heute', 'energy.kpi_end': 'Schätzung zum Ende {p}', 'energy.paid_val': 'Bezahlt: {v} €', 'energy.empty': 'Die kWh aus der Abrechnung fehlen.', 'energy.go_settings': 'Zu den Einstellungen', 'energy.units': 'Einheiten', 'energy.factor': 'kWh/Einheit', 'energy.factor_help': 'kWh der Abrechnung ÷ Einheiten des Zeitraums. Zeigt, wie viel Energie eine Zählereinheit wert ist.', 'energy.avg_factor_help': 'kWh der Abrechnung ÷ Einheiten des Zeitraums. Ein Zeitraum ohne Abrechnung nutzt das Mittel der bisherigen: alle kWh ÷ alle Einheiten, bei einer Wohnung mit den Gebäudesummen.', 'energy.kwh': 'kWh', 'energy.kwh_m2': 'kWh/m²', 'energy.w_m2': 'W/m²', 'energy.w_m2_help': 'Mittlere Leistung: kWh ÷ m² ÷ Stunden des Zeitraums. Das ist ein Mittelwert über den ganzen Zeitraum, nicht der Verbrauch einer bestimmten Stunde. Begann der Zeitraum mit dem Einzug, zählt er ab diesem Tag.', 'energy.costs_title': 'Kosten', 'energy.building_title': 'Gebäude', 'energy.kwh_building': 'kWh Gebäude', 'energy.kwh_m2_building': 'kWh/m² Gebäude', 'energy.kwh_m2_home': 'kWh/m² Wohnung', 'energy.vs_building': 'vs. Gebäude', 'energy.vs_building_help': 'Unterschied der kWh/m² deiner Wohnung zum Gebäudemittel. Negativ heißt: weniger Verbrauch pro m². Enthält der Zeitraum den Einzug, wird er nicht berechnet, weil die Monate abweichen würden.', 'energy.estimated_help': 'Dieser Zeitraum hat noch keine Abrechnung: Es wird der mittlere kWh/Einheit-Wert der bisherigen verwendet (alle kWh ÷ alle Einheiten).', 'energy.building_source': 'Aus kWh und Einheiten des Gebäudes berechnet, weil der Wert der Wohnung fehlt.', 'energy.building': 'laut Gebäude',
     'met.humidity': 'Relative Feuchte (rF)', 'met.temperature': 'Temperatur', 'met.note': 'Das sind Mediane, die nur aus tatsächlich gemessenen Werten berechnet werden. Stunden mit ausgefallenem Sensor zählen nicht. Mit mehr Tagen an Daten werden diese Werte belastbarer.', 'met.loses': 'Δ rF durch Lüften', 'met.recovers': 'Feuchte-Erholung', 'met.cools': 'ΔT durch Lüften', 'met.night': 'Nächtlicher Temperaturabfall', 'met.points': '% rF', 'met.points_h': '% rF/Std.', 'met.n_openings': 'Median · {n} Öffnungen', 'met.n_nights': 'Median · {n} Nächte', 'met.col_openings': 'Öffnungen', 'met.col_loses': 'Δ rF (% rF)', 'met.col_speed': 'Abfallrate (% rF/Min.)', 'met.col_recovers': 'Erholung 1 Std. (% rF)', 'met.col_cools': 'ΔT (°C)', 'met.col_temp_recovers': 'Erholung 1 Std. (°C)', 'met.col_nights': 'Nächte', 'met.col_night': 'Abfall 23–06 Uhr (°C)', 'met.col_outdoor': 'Außen-T', 'met.loses_help': 'Δ rF: Änderung der relativen Feuchte in Prozentpunkten (% rF), vom Wert vor dem Öffnen bis zum Tiefstwert der Öffnung. Es ist der Median der gemessenen Öffnungen.', 'met.speed_help': 'Abfallrate: pro Minute verlorene % rF, vom Öffnen bis zum Tiefstwert.', 'met.recovers_help': 'Erholung: In der Stunde nach dem Tiefstwert zurückgewonnene % rF. Sie stammt aus Feuchte, die Wände und Möbel abgeben, und aus der Nutzung der Wohnung. In Klammern: wie viele Öffnungen das messbar machen. Durch eine weitere Öffnung unterbrochene sind ausgeschlossen.', 'met.cools_help': 'ΔT: Änderung der Innentemperatur, vom Wert vor dem Öffnen bis zum Tiefstwert der Öffnung. Es ist der Median der gemessenen Öffnungen.', 'met.temp_recovers_help': 'Erholung: In der Stunde nach dem Tiefstwert gewonnene Grad. Ist sie negativ, kühlte der Raum weiter ab.', 'met.night_help': 'Nächtlicher Temperaturabfall: Temperaturänderung zwischen 23:00 und 06:00 Uhr, in Nächten ohne offene Fenster. Enthält die laufende Heizung und misst daher nicht allein die Dämmung.',
     'app.title': 'Raumklima',
@@ -1386,7 +1530,7 @@ function translatePage() {
 const COLORS = ['#1e9dc8', '#d0457c', '#63a402', '#7e68e3', '#a35e16', '#3774b5', '#228653', '#bc71ab'];
 const OUTDOOR_COLOR = '#8a93a2';
 const DAY = 864e5;
-const TABS = ['panel', 'temperatures', 'windows', 'thermostats', 'climate', 'energy', 'readings', 'water', 'periods', 'settings'];
+const TABS = ['panel', 'temperatures', 'windows', 'thermostats', 'plants', 'climate', 'energy', 'readings', 'water', 'periods', 'settings'];
 // Dial positions: 0, ❄ (0.5, frost protection) and from 1 to 5 in half points
 const LEVELS = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
 const LEVEL_MARKS = [0, 0.5, 1, 2, 3, 4, 5];   // those carrying a number (or ❄) on the scale
@@ -1657,10 +1801,12 @@ function changeLang(newLang) {
   translatePage();
   updateTitle();
   renderCards();
+  renderPlantCards();
   fillSelects();
   footerAndHeader();
   const tab = currentTab();
   if (tab === 'settings') renderSettings();
+  else if (tab === 'plants' && plantData) drawPlants();
   else if (tab === 'temperatures') loadTemperatures();
   else if (tab === 'windows') loadWindows();
   else if (tab === 'thermostats') loadThermostats();
@@ -1729,6 +1875,7 @@ function showTab() {
   if (tab === 'temperatures' && !temperaturesLoaded) loadTemperatures();
   if (tab === 'windows') loadWindows();
   if (tab === 'thermostats') loadThermostats();
+  if (tab === 'plants') loadPlants();
   if (tab === 'readings') showReadings();
   if (tab === 'energy') showEnergy();
   if (tab === 'periods') showPeriods();
@@ -1749,8 +1896,11 @@ async function loadState(silent = false) {
   // If someone opened or closed a window (from this or another device), the chart is redrawn
   const signature = state.sensors.map(s => s.open_window?.id || '').join(',');
   if (signatureWindows !== null && signature !== signatureWindows && currentTab() === 'panel') loadPanelChart().catch(() => {});
+  state.plants ||= [];
+  state.plants.map(p => p.id).sort().forEach((id, i) => colorPlant[id] = COLORS[(i + 3) % COLORS.length]);
   signatureWindows = signature;
   renderCards();
+  renderPlantCards();
   fillSelects();
   footerAndHeader();
   if (currentTab() === 'settings') renderSensorSettings();
@@ -1851,6 +2001,7 @@ function renderCards() {
         </div>
       </div></div></div>`;
   }
+  html += state.plants.map(plantCard).join('');
   $('#cards').innerHTML = html;
 }
 
@@ -2355,6 +2506,7 @@ function startByData(data, windows, start_at, end_at) {
 const lastDraw = {};
 function redrawCharts() {
   for (const id in lastDraw) draw(id, ...lastDraw[id]);
+  if (currentTab() === 'plants' && plantData) drawPlants();
   if (currentTab() === 'panel' && charts['chart-water-panel']) renderPanelWater();
   if (currentTab() === 'energy' && energyView === 'heating') renderConsumption();
   if (currentTab() === 'energy' && energyView === 'water') renderWaterAnalysis();
@@ -4153,6 +4305,169 @@ async function loadClimate() {
 }
 
 // ======================================================================
+//  Plants (Mi Flora over Bluetooth, via Theengs Gateway)
+// ======================================================================
+const PLANT_METRICS = {
+  moisture: { unit: '%', dec: 0, icon: 'cil-drop', low: 'plant.water', high: 'plant.too_wet' },
+  light: { unit: 'lux', dec: 0, icon: 'cil-sun' },   // instantaneous: low at night, so it raises no warning
+  conductivity: { unit: 'µS/cm', dec: 0, icon: 'cil-leaf', low: 'plant.fertilize', high: 'plant.too_fertile' },
+  temperature: { unit: '°C', dec: 1, icon: 'cil-plant', low: 'plant.too_cold', high: 'plant.too_hot' },
+};
+const PLANT_STALE_MS = 2 * 3600e3;   // same as VALID_READING_MINUTES in the backend
+const colorPlant = {};
+let plantData = null;
+const plantName = id => state.plants.find(p => p.id === id)?.name || `Mi Flora ${id.slice(-4)}`;
+const plantPoint = id => `<span class="point" style="background:${colorPlant[id] || '#999'}"></span>`;
+const plantStale = p => !p.last_reading || Date.now() - new Date(p.last_reading) > PLANT_STALE_MS;
+
+// Measurements outside their ideal range that call for an action (water, fertilise...)
+function plantWarnings(p) {
+  const out = [];
+  for (const [m, met] of Object.entries(PLANT_METRICS)) {
+    const v = p[m], ref = p.ref?.[m];
+    if (v == null || !ref || !met.low) continue;
+    if (v < ref.min) out.push(t(met.low));
+    else if (v > ref.max) out.push(t(met.high));
+  }
+  return out;
+}
+function plantCls(p, m) {
+  const v = p[m], ref = p.ref?.[m];
+  if (v == null || !ref || !PLANT_METRICS[m].low) return '';
+  return v < ref.min || v > ref.max ? 'text-danger' : 'text-success';
+}
+
+function plantCard(p) {
+  const warnings = plantWarnings(p), stale = plantStale(p);
+  const value = m => `<span class="${plantCls(p, m)}">${num(p[m], PLANT_METRICS[m].dec)} ${PLANT_METRICS[m].unit}</span>`;
+  const status = warnings.length ? warnings.map(w => `<span class="badge text-bg-warning">${esc(w)}</span>`).join('')
+    : p.moisture != null ? `<span class="badge text-bg-success">${t('plant.ok')}</span>` : '';
+  return `<div class="col"><div class="card h-100 card-room" style="border-top-color:${colorPlant[p.id] || '#999'}">
+    <div class="card-body d-flex flex-column">
+      <div class="d-flex align-items-center flex-wrap gap-2 fw-semibold"><i class="cil-leaf text-success"></i><span class="text-truncate">${esc(p.name)}</span>
+        ${stale && p.last_reading ? `<span class="badge text-bg-danger"><i class="cil-warning me-1"></i>${t('plant.no_signal')}</span>` : ''}</div>
+      <div class="temp-large my-2"><i class="cil-drop fs-4"></i> ${value('moisture')}</div>
+      <div class="small text-body-secondary"><i class="cil-sun"></i> ${value('light')} · <i class="cil-leaf"></i> ${value('conductivity')}</div>
+      <div class="small text-body-secondary"><i class="cil-plant"></i> ${value('temperature')}${p.battery != null ? ` · <i class="cil-battery-full"></i> ${p.battery} %` : ''}</div>
+      <div class="small text-body-secondary">${p.last_reading ? t('last_reading', { h: ago(p.last_reading) }) : t('no_readings')}</div>
+      <div class="mt-auto pt-3 d-flex flex-wrap gap-1">${status}</div>
+    </div></div></div>`;
+}
+
+function renderPlantCards() {
+  $('#pl-cards').innerHTML = state.plants.map(plantCard).join('');
+  $('#pl-empty').hidden = state.plants.length > 0;
+  const sel = $('#pl-sensor'), current = sel.value;
+  sel.innerHTML = `<option value="">${t('all')}</option>` + state.plants.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+  sel.value = state.plants.some(p => p.id === current) ? current : '';
+}
+
+async function loadPlants() {
+  const p = paramsRange('#pl-since', '#pl-until');
+  if ($('#pl-sensor').value) p.set('sensors', $('#pl-sensor').value);
+  $('#pl-download').href = '/api/plants.csv?' + p + '&lang=' + lang;
+  try { plantData = await api('/api/plants?' + p); } catch (err) { return toast(err.message); }
+  plantData.range = inputRange('#pl-since', '#pl-until', 7);
+  drawPlants();
+}
+$('#pl-apply').addEventListener('click', loadPlants);
+
+// One chart per measurement, one line per plant. The ideal band only makes sense with a single plant.
+function drawPlants() {
+  const { columns, rows, range } = plantData;
+  const col = Object.fromEntries(columns.map((c, i) => [c, i]));
+  const theme = chartTheme();
+  for (const [m, met] of Object.entries(PLANT_METRICS)) {
+    const series = {};
+    for (const r of rows) {
+      if (r[col[m]] != null) (series[r[col.sensor]] ??= []).push({ x: new Date(r[col.timestamp]).getTime(), y: r[col[m]] });
+    }
+    const ids = Object.keys(series);
+    const datasets = ids.map(id => ({
+      label: plantName(id), borderColor: colorPlant[id] || '#999', backgroundColor: colorPlant[id] || '#999', data: series[id],
+      borderWidth: 2, pointRadius: 0, pointHoverRadius: 3, tension: 0.2,
+    }));
+    const ref = ids.length === 1 && met.low ? state.plants.find(p => p.id === ids[0])?.ref?.[m] : null;
+    const fmt = v => `${num(v, Number.isInteger(v) ? 0 : 1)} ${met.unit}`;
+    renderChart('chart-plant-' + m, 'line', { datasets }, {
+      parsing: false, normalized: true,
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
+      scales: {
+        x: timeAxis(theme, range[0], range[1]),
+        y: valueAxis(theme, null, { beginAtZero: m !== 'temperature', ticks: { callback: fmt } }),
+      },
+      plugins: {
+        decimation: { enabled: true, algorithm: 'lttb' },
+        legend: { labels: lineLegend(theme) },
+        tooltip: { callbacks: { title: tooltipTimeTitle, label: it => `${it.dataset.label}: ${num(it.parsed.y, met.dec)} ${met.unit}` } },
+        references: ref ? { range: ref, textMin: t('plant.ideal_min', { v: fmt(ref.min) }), textMax: t('plant.ideal_max', { v: fmt(ref.max) }) } : {},
+        zoom: {
+          limits: { x: { min: range[0], max: range[1], minRange: 15 * 6e4 } },
+          pan: { enabled: true, mode: 'x' }, zoom: zoomGestures('x'),
+        },
+      },
+    });
+  }
+}
+
+// Settings > Sensors: name and ideal ranges of each plant
+function renderPlantSettings() {
+  const box = $('#a-plants');
+  if (box.contains(document.activeElement)) return;   // a live refresh must not wipe what is being typed
+  $('#a-plants-save').hidden = !state.plants.length;
+  box.innerHTML = state.plants.length ? state.plants.map(p => `<div class="border rounded p-3 mb-3" data-plant="${esc(p.id)}">
+      <div class="input-group mb-2">
+        <span class="input-group-text">${plantPoint(p.id)}</span>
+        <input class="form-control" data-field="name" value="${esc(p.configured_name)}" placeholder="Mi Flora ${esc(p.id.slice(-4))}" maxlength="40" aria-label="${esc(t('plant.plant'))}">
+        ${p.configured ? `<button class="btn btn-outline-danger" type="button" data-forget="${esc(p.id)}">${t('plant.forget')}</button>` : ''}
+      </div>
+      <div class="form-text tabular mb-2">${esc(p.id)} · ${p.last_reading ? t('settings.last', { h: ago(p.last_reading) }) : t('settings.no_readings')}${p.rssi != null ? ` · ${t('plant.rssi')} ${whole(p.rssi)} dBm` : ''}</div>
+      <div class="row g-2">${Object.entries(PLANT_METRICS).map(([m, met]) => `<div class="col-12 col-md-6">
+        <label class="form-label small mb-1">${t('plant.' + m)} (${met.unit})</label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text">${t('plant.min')}</span><input type="number" class="form-control" data-field="${m}.min" value="${p.ref[m].min}" step="any" aria-label="${esc(t('plant.' + m))} ${t('plant.min')}">
+          <span class="input-group-text">${t('plant.max')}</span><input type="number" class="form-control" data-field="${m}.max" value="${p.ref[m].max}" step="any" aria-label="${esc(t('plant.' + m))} ${t('plant.max')}">
+        </div></div>`).join('')}</div>
+    </div>`).join('') : `<p class="text-body-secondary mb-0">${t('plant.none')}</p>`;
+}
+
+function collectPlants(skip) {
+  const plants = {};
+  document.querySelectorAll('#a-plants [data-plant]').forEach(box => {
+    const id = box.dataset.plant;
+    if (id === skip) return;
+    const entry = { name: box.querySelector('[data-field=name]').value.trim() };
+    for (const m of Object.keys(PLANT_METRICS)) {
+      entry[m] = { min: Number(box.querySelector(`[data-field="${m}.min"]`).value), max: Number(box.querySelector(`[data-field="${m}.max"]`).value) };
+    }
+    plants[id] = entry;
+  });
+  return plants;
+}
+async function savePlants(plants) {
+  try {
+    await api('/api/config', { method: 'PUT', body: { plants } });
+    document.activeElement?.blur();
+    await loadState();
+    toast(t('plant.saved'), 'success');
+    if (currentTab() === 'plants') loadPlants();
+  } catch (err) { toast(err.message); }
+}
+$('#a-plants-save').addEventListener('click', async () => {
+  if (!await confirm(t('conf.plants'))) return;
+  await savePlants(collectPlants());
+});
+$('#a-plants').addEventListener('click', async e => {
+  const b = e.target.closest('[data-forget]');
+  if (!b) return;
+  if (!await confirm(t('conf.plant_forget', { h: plantName(b.dataset.forget) }))) return;
+  // The other plants keep their current state: configured ones stay, detected ones stay unconfigured
+  const configured = new Set(state.plants.filter(p => p.configured).map(p => p.id));
+  const plants = Object.fromEntries(Object.entries(collectPlants(b.dataset.forget)).filter(([id]) => configured.has(id)));
+  await savePlants(plants);
+});
+
+// ======================================================================
 //  Settings
 // ======================================================================
 // Signal levels (linkquality from 0 to 255): green from 100, yellow from 40, red below
@@ -4362,6 +4677,7 @@ $('#h-delete').addEventListener('click', async () => {
 
 function renderSensorSettings() {
   renderSignals();
+  renderPlantSettings();
   loadOutages().catch(() => {});
 }
 
@@ -4509,6 +4825,7 @@ async function refresh() {
   if (tab === 'windows') loadWindows();
   if (tab === 'thermostats') loadThermostats();
   if (tab === 'temperatures') loadTemperatures();
+  if (tab === 'plants') loadPlants();
 }
 
 (async () => {
@@ -4521,6 +4838,8 @@ async function refresh() {
   $('#v-since').value = dateInput(new Date(Date.now() - 29 * DAY));
   $('#tm-until').value = dateInput(new Date());
   $('#tm-since').value = dateInput(new Date(Date.now() - 29 * DAY));
+  $('#pl-until').value = dateInput(new Date());
+  $('#pl-since').value = dateInput(new Date(Date.now() - 6 * DAY));
   $('#en-until').value = dateInput(new Date());
   $('#en-since').value = `${new Date().getFullYear()}-01-01`;
   try { await loadState(); } catch (err) { toast(err.message); }

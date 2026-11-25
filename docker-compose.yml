@@ -28,6 +28,27 @@ services:
     environment:
       - TZ=Europe/Berlin
 
+  # Bluetooth LE to MQTT bridge for the Mi Flora plant sensors. Uses the Bluetooth adapter of the host
+  # through BlueZ (D-Bus), so it needs host networking; it reaches mosquitto on the published port 1883.
+  theengs:
+    image: theengs/gateway:latest
+    container_name: theengs
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    network_mode: host
+    volumes:
+      - /var/run/dbus:/var/run/dbus
+    environment:
+      - TZ=Europe/Berlin
+      - MQTT_HOST=127.0.0.1
+      - MQTT_PORT=1883
+      - MQTT_PUB_TOPIC=home/TheengsGateway/BTtoMQTT
+      - MQTT_SUB_TOPIC=home/+/BTtoMQTT/undecoded
+      - PUBLISH_ALL=false   # only devices Theengs can decode (not every phone or headset nearby)
+      - DISCOVERY=false     # no Home Assistant discovery messages
+      - LOG_LEVEL=WARNING
+
   panel:
     build: ./panel
     container_name: panel

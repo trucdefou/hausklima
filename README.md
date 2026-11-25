@@ -22,6 +22,7 @@ The sensors publish their readings to Zigbee2MQTT. The dashboard receives them o
 - Warns in the top bar when a sensor stops reporting, with signal status and an outage log in Settings.
 - Shows house metrics: humidity loss and recovery, cooling, and energy per m² from the annual heating bill, for a house or an apartment.
 - Supports manual sensors for rooms without a Zigbee sensor.
+- Logs Xiaomi Mi Flora plant sensors over Bluetooth (soil moisture, light, fertility, soil temperature), with an ideal range per plant and a warning when it needs water or fertiliser.
 - Tracks heating, hot water and cold water meter readings, with billing periods and consumption calculation. Hot water is rated against the Warmwasserspiegel; cold water is only counted.
 - Exports temperatures, windows, thermostats and consumption to CSV.
 - Available in Spanish, English and German; the language is picked from the browser.
@@ -50,10 +51,13 @@ Zigbee sensors ──► USB dongle ──► zigbee2mqtt ──► mosquitto �
                                                           data/climate.db (SQLite)
 ```
 
+Plant sensors take a separate path: the `theengs` service reads them over the Bluetooth adapter of the host and publishes them to the same mosquitto broker.
+
 | Service       | Image                        | Host port | Role                                      |
 |---------------|------------------------------|-----------|-------------------------------------------|
 | `mosquitto`   | `eclipse-mosquitto:2.0.20`   | 1883      | MQTT broker                               |
 | `zigbee2mqtt` | `koenkk/zigbee2mqtt:2.6.2`   | 8081      | Zigbee → MQTT bridge, with web UI         |
+| `theengs`     | `theengs/gateway`            | (host network) | Bluetooth LE to MQTT bridge for plant sensors |
 | `panel`       | local build (`panel/`)       | 8082      | Flask + Waitress, API and static frontend |
 
 The frontend is plain static files (CoreUI, Chart.js, chartjs-plugin-zoom, flatpickr) with no build step. The libraries are vendored in `panel/static/vendor`, so the dashboard loads nothing from a CDN.
@@ -128,13 +132,37 @@ The frontend is plain static files (CoreUI, Chart.js, chartjs-plugin-zoom, flatp
 
 7. Open the dashboard at `http://<host>:8082` and give each sensor a room name. The dashboard settings also let you set the location (for outdoor weather), the logging interval and the reference ranges for temperature and humidity.
 
+## Plant sensors (Mi Flora)
+
+The Xiaomi Mi Flora / Flower Care sensor (HHCCJCY01, sold "for the Mijia app") uses Bluetooth LE, not Zigbee. The `theengs` service ([Theengs Gateway](https://gateway.theengs.io/)) listens to its advertisements with the Bluetooth adapter built into the Raspberry Pi and publishes them to mosquitto under `home/TheengsGateway/BTtoMQTT/<MAC>`. It doesn't pair or connect to the sensor, so the app and the battery are not affected.
+
+1. Make sure Bluetooth is on in the host:
+
+   ```bash
+   bluetoothctl show          # must show "Powered: yes"
+   sudo rfkill unblock bluetooth
+   sudo systemctl enable --now bluetooth
+   ```
+
+2. Place the sensor within about 10 m of the Pi (walls reduce the range a lot) and start the services with `docker compose up -d`.
+3. Check that the data arrives (the sensor advertises about once a minute):
+
+   ```bash
+   docker run --rm --network host eclipse-mosquitto:2.0.20 mosquitto_sub -h 127.0.0.1 -t 'home/TheengsGateway/#' -v
+   ```
+
+   A Mi Flora shows up with `"model_id":"HHCCJCY01HHCC"` and the fields `moi` (soil moisture %), `lux`, `fer` (conductivity µS/cm) and `tempc`.
+4. In the dashboard, the plant appears on the main page and in **Plants**. Name it and set its ideal ranges in **Settings > Sensors**.
+
+If nothing arrives, set `PUBLISH_ALL=true` and `LOG_LEVEL=DEBUG` for `theengs` in `docker-compose.yml` to see what it receives. Battery level is not included in the passive advertisements, so it usually shows as empty.
+
 ## Data
 
 Everything the dashboard generates lives in `data/`:
 
 | File             | Contents                                                     |
 |------------------|--------------------------------------------------------------|
-| `climate.db`     | SQLite database with readings, windows, thermostats and meters |
+| `climate.db`     | SQLite database with readings, windows, thermostats, meters and plant readings |
 | `config.json`    | Location, room names, interval and ranges                    |
 | `.session_key`   | Key used to sign session cookies (created automatically)     |
 
