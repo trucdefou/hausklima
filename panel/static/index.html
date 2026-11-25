@@ -371,11 +371,18 @@
           <div class="card-header"><i class="cil-filter me-2"></i><strong data-i18n="filters"></strong></div>
           <div class="card-body">
             <div class="row g-3 align-items-end">
-              <div class="col-12 col-md-3"><label class="form-label" for="en-period" data-i18n="period.period"></label><select class="form-select" id="en-period"></select></div>
+              <div class="col-12 col-md-2"><label class="form-label" for="en-period" data-i18n="period.period"></label><select class="form-select" id="en-period"></select></div>
               <div class="col-6 col-md-2"><label class="form-label" for="en-since" data-i18n="since"></label><input type="date" class="form-control" id="en-since"></div>
               <div class="col-6 col-md-2"><label class="form-label" for="en-until" data-i18n="until"></label><input type="date" class="form-control" id="en-until"></div>
-              <div class="col-12 col-md-2"><label class="form-label" for="en-meter" data-i18n="meter.meter"></label><select class="form-select" id="en-meter"></select></div>
-              <div class="col-12 col-md-3 d-flex gap-2">
+              <div class="col-6 col-md-2"><label class="form-label" for="en-meter" data-i18n="meter.meter"></label><select class="form-select" id="en-meter"></select></div>
+              <div class="col-6 col-md-2"><label class="form-label" for="en-avg"><span data-i18n="consumption.avg_by"></span> <i class="cil-info ms-1 text-body-secondary" role="img" tabindex="0" data-i18n-title="consumption.avg_help" data-i18n-aria="consumption.avg_help"></i></label>
+                <select class="form-select" id="en-avg">
+                  <option value="day" data-i18n="consumption.avg_unit_day"></option>
+                  <option value="week" data-i18n="consumption.avg_unit_week"></option>
+                  <option value="month" data-i18n="consumption.avg_unit_month"></option>
+                  <option value="year" data-i18n="consumption.avg_unit_year"></option>
+                </select></div>
+              <div class="col-12 col-md-2 d-flex gap-2">
                 <button class="btn btn-primary" id="en-apply" data-i18n="filter"></button>
                 <a class="btn btn-outline-secondary" id="en-download"><i class="cil-cloud-download me-1"></i>CSV</a>
               </div>
@@ -972,7 +979,9 @@ const I18N = {
     'meter.confirm_delete': '¿Borrar el medidor "{n}" y todas sus lecturas?', 'meter.first': 'primera lectura',
     'consumption.prev_period': 'Período anterior', 'consumption.to_date': 'A la fecha', 'consumption.projection': 'Proyección', 'consumption.proj_total_help': 'Suma de la proyección de cada medidor. Cada una es lo consumido + el ritmo de este período por grado-día × el frío de las mismas fechas restantes del año anterior. Es una estimación: asume un invierno igual al anterior y seguir calefaccionando igual.', 'consumption.cold_help': 'Reparto según el frío: entre dos lecturas, cada día recibe consumo según su temperatura media exterior (Open-Meteo). Los días más fríos reciben más y los días de 15 °C o más casi nada. El total entre dos lecturas no cambia. Es una estimación: no sabe cómo se calefaccionó realmente.', 'consumption.estimated': 'estimado', 'consumption.estimated_help': 'Ese período no tiene lecturas cerca de esta fecha: no se puede saber cuánto se había consumido hasta acá. Por eso solo se muestra el período completo, sin porcentaje.', 'consumption.partial': 'Datos incompletos: el período anterior tiene datos solo de una parte de esas fechas', 'consumption.period': 'en el período', 'consumption.per_day': '{v} por día', 'consumption.total': 'Total desde el inicio: {v}', 'consumption.total_all': 'Total',
     'consumption.cumulative_title': 'Consumo acumulado en el período', 'consumption.bars_day': 'Consumo por día', 'consumption.bars_month': 'Consumo por mes',
-    'consumption.periods': 'Períodos entre lecturas', 'consumption.avg_day': 'Prom./día',
+    'consumption.periods': 'Períodos entre lecturas', 'consumption.avg_day': 'Prom./día', 'consumption.avg_week': 'Prom./semana', 'consumption.avg_month': 'Prom./mes',
+    'consumption.avg_by': 'Promedio por', 'consumption.avg_unit_day': 'Día', 'consumption.avg_unit_week': 'Semana', 'consumption.avg_unit_month': 'Mes',
+    'consumption.per_week': '{v} por semana', 'consumption.per_month': '{v} por mes', 'consumption.avg_help': 'Promedio sobre los días con lecturas dentro del rango elegido. Un mes cuenta como 30,44 días y un año como 365,25.', 'consumption.avg_unit_year': 'Año', 'consumption.avg_year': 'Prom./año', 'consumption.per_year': '{v} por año',
     'consumption.help': 'Entre dos lecturas, el consumo de calefacción se reparte según el frío de cada día, así que un período puede incluir solo una parte. Se cuenta hasta la última lectura.',
     'consumption.no_meters': 'No hay medidores. Crealos en Datos → Medidores de calefacción.', 'energy.no_water': 'No hay contadores de agua. Crealos en Datos → Medidores de agua.', 'err.invalid_reading': 'Lectura inválida',
     'nav.thermostats': 'Termostatos', 'thermo.title': 'Termostato', 'thermo.changed': 'cambiado {h}', 'thermo.no': 'sin registrar',
@@ -1100,7 +1109,9 @@ const I18N = {
     'meter.confirm_delete': 'Delete meter "{n}" and all its readings?', 'meter.first': 'first reading',
     'consumption.prev_period': 'Previous period', 'consumption.to_date': 'To date', 'consumption.projection': 'Projection', 'consumption.proj_total_help': 'Sum of each meter\'s projection. Each one is consumption so far + this period\'s rate per degree day × the cold of the same remaining dates last year. It is an estimate: it assumes a winter like the last one and heating the same way.', 'consumption.cold_help': 'Cold-based split: between two readings, each day gets consumption according to its average outdoor temperature (Open-Meteo). Colder days get more, and days at 15 °C or above get almost nothing. The total between two readings does not change. It is an estimate: it does not know how you actually heated.', 'consumption.estimated': 'estimated', 'consumption.estimated_help': 'That period has no readings near this date, so the consumption up to here is unknown. The full period is shown, without a percentage.', 'consumption.partial': 'Incomplete data: the previous period only has data for part of these dates', 'consumption.period': 'in this period', 'consumption.per_day': '{v} per day', 'consumption.total': 'Total since start: {v}', 'consumption.total_all': 'Total',
     'consumption.cumulative_title': 'Accumulated consumption in the period', 'consumption.bars_day': 'Consumption per day', 'consumption.bars_month': 'Consumption per month',
-    'consumption.periods': 'Periods between readings', 'consumption.avg_day': 'Avg./day',
+    'consumption.periods': 'Periods between readings', 'consumption.avg_day': 'Avg./day', 'consumption.avg_week': 'Avg./week', 'consumption.avg_month': 'Avg./month',
+    'consumption.avg_by': 'Average per', 'consumption.avg_unit_day': 'Day', 'consumption.avg_unit_week': 'Week', 'consumption.avg_unit_month': 'Month',
+    'consumption.per_week': '{v} per week', 'consumption.per_month': '{v} per month', 'consumption.avg_help': 'Average over the days covered by readings within the selected range. A month counts as 30.44 days and a year as 365.25.', 'consumption.avg_unit_year': 'Year', 'consumption.avg_year': 'Avg./year', 'consumption.per_year': '{v} per year',
     'consumption.help': 'Between two readings, heating consumption is split according to how cold each day was, so a period may include only part of it. Counted up to the last reading.',
     'consumption.no_meters': 'There are no meters. Create them under Data → Heating meters.', 'energy.no_water': 'There are no water meters. Create them under Data → Water meters.', 'err.invalid_reading': 'Invalid reading',
     'nav.thermostats': 'Thermostats', 'thermo.title': 'Thermostat', 'thermo.changed': 'changed {h}', 'thermo.no': 'not set',
@@ -1228,7 +1239,9 @@ const I18N = {
     'meter.confirm_delete': 'Zähler „{n}“ mit allen Ablesungen löschen?', 'meter.first': 'erste Ablesung',
     'consumption.prev_period': 'Vorzeitraum', 'consumption.to_date': 'Bis Stichtag', 'consumption.projection': 'Prognose', 'consumption.proj_total_help': 'Summe der Prognosen je Zähler. Jede ist der bisherige Verbrauch + das Tempo dieses Zeitraums pro Gradtag × die Kälte derselben verbleibenden Daten im Vorjahr. Das ist eine Schätzung: Sie nimmt einen Winter wie den letzten und gleiches Heizen an.', 'consumption.cold_help': 'Verteilung nach Kälte: Zwischen zwei Ablesungen erhält jeder Tag Verbrauch nach seiner mittleren Außentemperatur (Open-Meteo). Kältere Tage erhalten mehr, Tage ab 15 °C fast nichts. Die Summe zwischen zwei Ablesungen bleibt gleich. Das ist eine Schätzung: Sie weiß nicht, wie tatsächlich geheizt wurde.', 'consumption.estimated': 'geschätzt', 'consumption.estimated_help': 'Dieser Zeitraum hat keine Messwerte nahe diesem Datum, der Verbrauch bis hierher ist also unbekannt. Gezeigt wird der gesamte Zeitraum, ohne Prozentangabe.', 'consumption.partial': 'Unvollständige Daten: Der Vorzeitraum enthält nur für einen Teil dieser Daten Werte', 'consumption.period': 'im Zeitraum', 'consumption.per_day': '{v} pro Tag', 'consumption.total': 'Gesamt seit Beginn: {v}', 'consumption.total_all': 'Gesamt',
     'consumption.cumulative_title': 'Kumulierter Verbrauch im Zeitraum', 'consumption.bars_day': 'Verbrauch pro Tag', 'consumption.bars_month': 'Verbrauch pro Monat',
-    'consumption.periods': 'Zeiträume zwischen Ablesungen', 'consumption.avg_day': 'Ø/Tag',
+    'consumption.periods': 'Zeiträume zwischen Ablesungen', 'consumption.avg_day': 'Ø/Tag', 'consumption.avg_week': 'Ø/Woche', 'consumption.avg_month': 'Ø/Monat',
+    'consumption.avg_by': 'Durchschnitt pro', 'consumption.avg_unit_day': 'Tag', 'consumption.avg_unit_week': 'Woche', 'consumption.avg_unit_month': 'Monat',
+    'consumption.per_week': '{v} pro Woche', 'consumption.per_month': '{v} pro Monat', 'consumption.avg_help': 'Durchschnitt über die Tage mit Ablesungen im gewählten Bereich. Ein Monat zählt als 30,44 Tage, ein Jahr als 365,25.', 'consumption.avg_unit_year': 'Jahr', 'consumption.avg_year': 'Ø/Jahr', 'consumption.per_year': '{v} pro Jahr',
     'consumption.help': 'Zwischen zwei Ablesungen wird der Heizverbrauch nach der Kälte jedes Tages verteilt, daher kann ein Zeitraum nur einen Teil enthalten. Gezählt wird bis zur letzten Ablesung.',
     'consumption.no_meters': 'Keine Zähler vorhanden. Lege sie unter Daten → Heizkostenverteiler an.', 'energy.no_water': 'Keine Wasserzähler vorhanden. Lege sie unter Daten → Wasserzähler an.', 'err.invalid_reading': 'Ungültiger Zählerstand',
     'nav.thermostats': 'Thermostate', 'thermo.title': 'Thermostat', 'thermo.changed': 'geändert {h}', 'thermo.no': 'nicht erfasst',
@@ -2127,6 +2140,17 @@ function meterConsumption(m, start, end) {
   const days = s.length > 1 && to > from ? (to - from) / DAY : 0;
   return { m, s, consumption, days, perDay: days ? consumption / days : null };
 }
+
+// Average per day, week or month, chosen in the energy filter (remembered per browser)
+const AVG_DAYS = { day: 1, week: 7, month: 365.25 / 12, year: 365.25 };
+const avgUnit = () => AVG_DAYS[$('#en-avg').value] ? $('#en-avg').value : 'day';
+const perAvgUnit = perDay => perDay * AVG_DAYS[avgUnit()];
+const avgText = (perDay, fmt) => t('consumption.per_' + avgUnit(), { v: fmt(perAvgUnit(perDay)) });
+try { const v = localStorage.getItem('energy-avg'); if (AVG_DAYS[v]) $('#en-avg').value = v; } catch (e) {}
+$('#en-avg').addEventListener('change', () => {
+  try { localStorage.setItem('energy-avg', avgUnit()); } catch (e) {}
+  renderEnergyView();
+});
 
 // Window openings: vertical line on opening, another on closing and the area between shaded.
 // While still open only the opening line is shown and the shade reaches "now".
@@ -3273,12 +3297,14 @@ function renderConsumption() {
       full: withPrev.reduce((s, x) => s + x.prev.full, 0), estimated: withPrev.some(x => x.prev.estimated),
       byCold: withPrev.some(x => x.prev.byCold),
       partial: withPrev.length < data.length || withPrev.some(x => x.prev.partial) } : null;
-    html += widget(t('consumption.total_all'), fmtValue(total, 2), [...units][0], '', '', 'var(--cui-primary)',
+    const withAvg = data.filter(x => x.perDay != null);
+    html += widget(t('consumption.total_all'), fmtValue(total, 2), [...units][0],
+      withAvg.length ? avgText(withAvg.reduce((s, x) => s + x.perDay, 0), v => fmtValue(v, 2)) : '', '', 'var(--cui-primary)',
       htmlComparison(total, prevTotal),
       data.every(x => x.projection?.proj != null) ? htmlProjection(data.reduce((s, x) => s + x.projection.proj, 0), t('consumption.proj_total_help')) : '');
   }
   html += data.map(x => widget(esc(x.m.name), fmtValue(x.consumption, 2), unitOf(x.m),
-    x.perDay == null ? '' : t('consumption.per_day', { v: fmtValue(x.perDay, 2) }),
+    x.perDay == null ? '' : avgText(x.perDay, v => fmtValue(v, 2)),
     '', colorMeter[x.m.id], htmlComparison(x.consumption, x.prev),
     x.projection?.proj != null ? htmlProjection(x.projection.proj, helpProjection(x.projection.cold)) : '')).join('');
   $('#cs-summary').innerHTML = meters.length ? html : `<div class="col-12"><div class="card"><div class="card-body text-body-secondary">${t('consumption.no_meters')}</div></div></div>`;
@@ -3356,13 +3382,13 @@ function renderConsumption() {
   const segments = meterReadings.filter(l => ids.has(l.meter) && l.consumption != null && l.kind !== 'period_start' && !l.before_move_in &&
     new Date(l.timestamp).getTime() >= d && new Date(l.since).getTime() <= h).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   $('#cs-table').innerHTML = `<thead><tr><th>${t('meter.meter')}</th><th>${t('since')}</th><th>${t('until')}</th><th class="text-end">${t('meter.days')}</th>
-    <th class="text-end">${t('meter.consumption')}</th><th class="text-end">${t('consumption.avg_day')}</th><th class="text-end">${t('meter.cumulative')}</th></tr></thead><tbody>` +
+    <th class="text-end">${t('meter.consumption')}</th><th class="text-end">${t('consumption.avg_' + avgUnit())}</th><th class="text-end">${t('meter.cumulative')}</th></tr></thead><tbody>` +
     (segments.length ? segments.map(l => { const m = meterById(l.meter); return `<tr>
       <td><span class="d-inline-flex align-items-center gap-2">${meterPoint(l.meter)}${esc(m?.name)}${l.virtual ? ` <em class="small text-body-secondary">(${esc(virtualLabel(l))})</em>` : ''}</span></td>
       <td>${fmtDateTime(l.since)}</td><td>${fmtDateTime(l.timestamp)}</td>
       <td class="text-end">${num(l.days, 1)}</td>
       <td class="text-end">${fmtValue(l.consumption, 2)} <span class="small text-body-secondary">${esc(unitOf(m))}</span>${badgeReset(l)}</td>
-      <td class="text-end">${l.days ? fmtValue(l.consumption / l.days, 2) : '–'}</td>
+      <td class="text-end">${l.days ? fmtValue(perAvgUnit(l.consumption / l.days), 2) : '–'}</td>
       <td class="text-end">${fmtValue(l.cumulative, 2)}</td></tr>`; }).join('')
     : `<tr><td colspan="7" class="text-center text-body-secondary py-4">${t('no_records')}</td></tr>`) + '</tbody>';
   paginateTable('#cs-table');
@@ -3650,10 +3676,10 @@ function renderWaterAnalysis() {
   let html = waterMeters.length ? '' : `<div class="col-12"><div class="card"><div class="card-body text-body-secondary">${t('energy.no_water')}</div></div></div>`;
   if (data.length > 1 && data.every(x => inLiters(x.m))) {
     const total = data.reduce((s, x) => s + x.consumption, 0), dayTotal = data.reduce((s, x) => s + (x.perDay || 0), 0);
-    html += widgetWater(t('consumption.total_all'), fmtConsumption(total, data[0].m), t('water.per_day', { v: fmtConsumption(dayTotal, data[0].m) }), 'var(--cui-primary)');
+    html += widgetWater(t('consumption.total_all'), fmtConsumption(total, data[0].m), avgText(dayTotal, v => fmtConsumption(v, data[0].m)), 'var(--cui-primary)');
   }
   html += data.map(x => widgetWater(esc(x.m.name), fmtConsumption(x.consumption, x.m),
-    x.perDay == null ? t('water.in_period') : t('water.per_day', { v: fmtConsumption(x.perDay, x.m) }), colorMeter[x.m.id])).join('');
+    x.perDay == null ? t('water.in_period') : avgText(x.perDay, v => fmtConsumption(v, x.m)), colorMeter[x.m.id])).join('');
   $('#ag-summary').innerHTML = html;
 
   // Bars per day or per month
